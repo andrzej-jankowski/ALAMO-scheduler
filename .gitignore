@@ -62,3 +62,6 @@ target/
 # PBR files
 AUTHORS
 ChangeLog
+
+# Vagrant
+.vagrant
