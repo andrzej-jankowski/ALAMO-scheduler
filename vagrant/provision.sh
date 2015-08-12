@@ -29,4 +29,4 @@ fi
 
 # Install application environment
 su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install ipython tox'
-su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install asyncio asyncio_redis aioconsul aioamqp'
+su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install asyncio asyncio_redis aioconsul aioamqp apscheduler'
