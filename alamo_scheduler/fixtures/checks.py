@@ -53,6 +53,6 @@ def generate_check_def(check_id, interval=1):
 
 
 def load_data_to_memory(nr_of_checks=1000):
-    checks = dict((i, generate_check_def(i, randint(1, 10)))
+    checks = dict((i, generate_check_def(i, randint(10, 40)))
                   for i in range(1, nr_of_checks))
     return checks
