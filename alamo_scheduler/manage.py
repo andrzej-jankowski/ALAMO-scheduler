@@ -6,6 +6,7 @@ import os
 from configparser import ConfigParser
 
 from alamo_scheduler.scheduler import AlamoScheduler
+from alamo_scheduler.queue import ZeroMQQueue
 
 parser = argparse.ArgumentParser()
 
@@ -39,8 +40,13 @@ def main():
     max_instances = config_parser.getint('jobs', 'max_instances')
     coalesce = config_parser.getboolean('jobs', 'coalesce')
 
+    zero_mq_port = config_parser.get('zero_mq', 'host')
+    zero_mq_host = config_parser.get('zero_mq', 'port')
+
     scheduler = AlamoScheduler(
-        redis_host, redis_port, redis_db, cache_update_key,
+        redis_host, redis_port, redis_db,
+        cache_update_key,
+        ZeroMQQueue(zero_mq_port, zero_mq_host),
         misfire_grace_time=misfire_grace_time,
         max_instances=max_instances,
         coalesce=coalesce,

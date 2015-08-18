@@ -3,21 +3,21 @@ from __future__ import unicode_literals
 
 import asyncio
 import os
-from datetime import datetime
 
 from redis import StrictRedis
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from alamo_scheduler.fixtures.checks import (
     load_data_to_memory,
     generate_check_def
 )
-
 from alamo_scheduler.loggers import logger
 
 
 class AlamoScheduler(object):
     def __init__(self, redis_host, redis_port, redis_db, cache_update_key,
+                 message_queue,
                  misfire_grace_time=1,
                  max_instances=4, coalesce=True,
                  verbose=False):
@@ -26,10 +26,14 @@ class AlamoScheduler(object):
         self.redis_port = redis_port
         self.redis_db = redis_db
         self.cache_update_key = cache_update_key
+
+        self.message_queue = message_queue
         self.verbose = verbose
         self.misfire_grace_time = misfire_grace_time
         self.max_instances = max_instances
         self.coalesce = coalesce
+
+        self.message_queue.connect()
 
     def load_checks(self):
         return load_data_to_memory(3000)
@@ -38,12 +42,9 @@ class AlamoScheduler(object):
         if self.verbose:
             logger.debug(message)
 
-    def _schedule_check(self, check, test):
+    def _schedule_check(self, check):
         """Schedule check."""
-        if 'check_{}'.format(test) == check['name']:
-            self._verbose('{} Tick! Interval is: {}. The time is: {}'.
-                          format(check['name'], check['interval'],
-                                 datetime.now()))
+        self.message_queue.send(check)
 
     def _update_is_required(self):
         """Check if update is required."""
@@ -70,7 +71,7 @@ class AlamoScheduler(object):
             max_instances=self.max_instances,
             coalesce=self.coalesce,
             id=str(check_id),
-            args=(check, check_id))
+            args=(check, ))
 
         self._verbose("Updating")
 
@@ -86,7 +87,7 @@ class AlamoScheduler(object):
                                    max_instances=self.max_instances,
                                    coalesce=self.coalesce,
                                    id=str(k),
-                                   args=(v, 900))
+                                   args=(v,))
         self.scheduler.start()
         self._verbose('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))
