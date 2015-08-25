@@ -1,2 +1,6 @@
 pbr
 Sphinx
+asyncio==3.4.3
+APScheduler==3.0.3
+redis==2.10.3
+pyzmq==14.7.0
