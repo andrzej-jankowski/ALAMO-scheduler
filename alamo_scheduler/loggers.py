@@ -1,16 +1,37 @@
 # -*- coding: utf-8 -*-
-from __future__ import unicode_literals
 
-import logging
+from logging.config import dictConfig
 
-LOG_LEVEL = "DEBUG"
-LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+LOGGING = \
+    {
+        'version': 1,
+        'disable_existing_loggers': True,
+        'formatters': {
+            'verbose': {
+                'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+            },
+            'vverbose': {
+                'format': '%(asctime)s %(levelname)s %(pathname)s line:%(lineno)d: "%(message)s"'
+            },
+            'simple': {
+                'format': '%(levelname)s %(message)s'
+            },
+        },
+        'handlers': {
+            'console': {
+                'level': 'DEBUG',
+                'class': 'logging.StreamHandler',
+                'formatter': 'verbose'
+            }
+        },
+        'loggers': {
+            'alamo_scheduler': {
+                'handlers': ['console'],
+                'level': 'DEBUG'
+            },
+        }
+    }
 
-console_handler = logging.StreamHandler()
-log_level = getattr(logging, LOG_LEVEL, 10)
-console_handler.setLevel(log_level)
-formatter = logging.Formatter(LOG_FORMAT)
-console_handler.setFormatter(formatter)
-logger = logging.getLogger('alamo.scheduler')
-logger.setLevel(log_level)
-logger.addHandler(console_handler)
+
+def configure_logging():
+    dictConfig(LOGGING)
