@@ -8,10 +8,10 @@ LOGGING = \
         'disable_existing_loggers': True,
         'formatters': {
             'verbose': {
-                'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'
+                'format': '%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s'  # noqa
             },
             'vverbose': {
-                'format': '%(asctime)s %(levelname)s %(pathname)s line:%(lineno)d: "%(message)s"'
+                'format': '%(asctime)s %(levelname)s %(pathname)s line:%(lineno)d: "%(message)s"'  # noqa
             },
             'simple': {
                 'format': '%(levelname)s %(message)s'

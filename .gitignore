@@ -67,3 +67,5 @@ ChangeLog
 .vagrant
 
 *-local.cfg
+.DS_Store
+.venv
