@@ -5,16 +5,10 @@ import json
 import logging
 
 from apscheduler.jobstores.base import JobLookupError
-
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from kafka.client import KafkaClient
-
 from kafka.consumer.simple import SimpleConsumer
-
-from requests import Session
-
-from requests.exceptions import RequestException
+from requests import Session, RequestException
 
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
