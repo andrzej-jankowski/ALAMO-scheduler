@@ -20,4 +20,3 @@ class TestAlamoWorker(TestCase):
         parser = self.manager.build_args()
         self.assertTrue(
             isinstance(parser, ArgumentParser))
-

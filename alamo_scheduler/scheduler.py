@@ -112,10 +112,8 @@ class AlamoScheduler(object):
 
             logger.debug(check)
             self.remove_job(check['id'])
-            for trigger in check['triggers']:
-                enabled = trigger['enabled']
-                if enabled:
-                    self.schedule_job(check)
+            if any([trigger['enabled'] for trigger in check['triggers']]):
+                self.schedule_job(check)
 
         logger.debug('Messages consumed.')
 
