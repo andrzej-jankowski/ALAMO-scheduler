@@ -10,14 +10,12 @@ from alamo_scheduler.scheduler import AlamoScheduler
 
 class AlamoManager(object):
     def __init__(self):
-        self.parser = argparse.ArgumentParser()
+        self.parser = self.build_args()
 
         self.setup()
 
     def setup(self):
         configure_logging()
-
-        self.build_args()
 
         config_parser = self.parse_config()
         config_data = []
@@ -27,8 +25,11 @@ class AlamoManager(object):
 
         initialize_settings(config_data)
 
-    def build_args(self):
-        self.parser.add_argument(
+    @staticmethod
+    def build_args():
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument(
             '--config', '-c',
             type=str,
             required=False,
@@ -37,6 +38,7 @@ class AlamoManager(object):
                 'If not provided default config file will be taken.'
             )
         )
+        return parser
 
     def parse_config(self):
         """Parse config file."""

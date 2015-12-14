@@ -3,12 +3,14 @@ import asyncio
 import os
 import json
 import logging
+import socket
 
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka.client import KafkaClient
 from kafka.consumer.simple import SimpleConsumer
 from requests import Session, RequestException
+from statsd.client import StatsClient
 
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
@@ -26,6 +28,17 @@ class AlamoScheduler(object):
             kafka_client,
             settings.KAFKA__GROUP,
             settings.KAFKA__TOPIC
+        )
+        self.statsd = self.initialize_statsd()
+
+    def initialize_statsd(self):
+        hostname = socket.getfqdn().replace('.', '_')
+        prefix = '{}.{}'.format(settings.STATSD__STATSD_PREFIX, hostname)
+        return StatsClient(
+            host=settings.STATSD__STATSD_HOST,
+            port=settings.STATSD__STATSD_PORT,
+            prefix=prefix,
+            maxudpsize=settings.STATSD__STATSD_MAXUDPSIZE
         )
 
     def setup(self):
@@ -57,6 +70,8 @@ class AlamoScheduler(object):
 
     def _schedule_check(self, check):
         """Schedule check."""
+
+        self.statsd.incr('_scheduled_check')
         logger.info('Check scheduled!')
         self.message_queue.send(check)
 
@@ -75,6 +90,7 @@ class AlamoScheduler(object):
                 check['name'], check['id'], check['fields']['frequency']
             )
         )
+
         self.scheduler.add_job(
             self._schedule_check, 'interval',
             seconds=check['fields']['frequency'],
@@ -96,8 +112,7 @@ class AlamoScheduler(object):
 
             logger.debug(check)
             self.remove_job(check['id'])
-            enabled = check['triggers'][0]['enabled']
-            if enabled:
+            if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
 
         logger.debug('Messages consumed.')
