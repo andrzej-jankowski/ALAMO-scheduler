@@ -33,7 +33,7 @@ class AlamoScheduler(object):
 
     def initialize_statsd(self):
         hostname = socket.getfqdn().replace('.', '_')
-        prefix = settings.STATSD__STATSD_PREFIX + '.{}'.format(hostname)
+        prefix = '{}.{}'.format(settings.STATSD__STATSD_PREFIX, hostname)
         return StatsClient(
             host=settings.STATSD__STATSD_HOST,
             port=settings.STATSD__STATSD_PORT,
