@@ -1,16 +1,17 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import os
 import json
 import logging
-import socket
+import os
+import random
+from datetime import datetime, timedelta
 
+from aiomeasures import StatsD
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka.client import KafkaClient
 from kafka.consumer.simple import SimpleConsumer
 from requests import Session, RequestException
-from statsd.client import StatsClient
 
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
@@ -32,14 +33,9 @@ class AlamoScheduler(object):
         self.statsd = self.initialize_statsd()
 
     def initialize_statsd(self):
-        hostname = socket.getfqdn().replace('.', '_')
-        prefix = '{}.{}'.format(settings.STATSD__STATSD_PREFIX, hostname)
-        return StatsClient(
-            host=settings.STATSD__STATSD_HOST,
-            port=settings.STATSD__STATSD_PORT,
-            prefix=prefix,
-            maxudpsize=settings.STATSD__STATSD_MAXUDPSIZE
-        )
+        host = 'udp://{}:{}'.format(settings.STATSD__STATSD_HOST,
+                                    settings.STATSD__STATSD_PORT)
+        return StatsD(addr=host, prefix=settings.STATSD__STATSD_PREFIX)
 
     def setup(self):
         self.message_queue = ZeroMQQueue(
@@ -71,7 +67,7 @@ class AlamoScheduler(object):
     def _schedule_check(self, check):
         """Schedule check."""
 
-        self.statsd.incr('_scheduled_check')
+        self.statsd.incr('_scheduled_check', 1)
         logger.info('Check scheduled!')
         self.message_queue.send(check)
 
@@ -90,7 +86,8 @@ class AlamoScheduler(object):
                 check['name'], check['id'], check['fields']['frequency']
             )
         )
-
+        jitter = random.randint(0, check['fields']['frequency'])
+        first_run = datetime.now() + timedelta(seconds=jitter)
         self.scheduler.add_job(
             self._schedule_check, 'interval',
             seconds=check['fields']['frequency'],
@@ -98,6 +95,7 @@ class AlamoScheduler(object):
             max_instances=settings.JOBS__MAX_INSTANCES,
             coalesce=settings.JOBS__COALESCE,
             id=str(check['id']),
+            next_run_time=first_run,
             args=(check,)
         )
 
