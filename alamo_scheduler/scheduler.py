@@ -6,6 +6,7 @@ import os
 import random
 from datetime import datetime, timedelta
 
+import pytz
 from aiomeasures import StatsD
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -45,8 +46,7 @@ class AlamoScheduler(object):
         self.message_queue.connect()
 
     def retrieve_all_jobs(self):
-        checks = []
-        page = 1
+        checks, page = [], 1
 
         try:
             session = Session()
@@ -77,12 +77,17 @@ class AlamoScheduler(object):
         """Schedule check."""
 
         self.statsd.incr('_scheduled_check', 1)
-        logger.info('Check scheduled!')
+        logger.info(
+            'Check `{}:{}` scheduled!'.format(check['id'], check['name'])
+        )
+
+        check['scheduled_time'] = datetime.now(tz=pytz.utc).isoformat()
         self.message_queue.send(check)
 
     def remove_job(self, job_id):
         """Remove job."""
         try:
+            logger.info('Removing job for check id=`{}`'.format(job_id))
             self.scheduler.remove_job(str(job_id))
         except JobLookupError:
             pass
@@ -117,7 +122,9 @@ class AlamoScheduler(object):
             _, message = message
             check = json.loads(message.value.decode('utf-8'))
 
-            logger.debug(check)
+            logger.info(
+                'New check definition retrieved from kafka: `{}`'.format(check)
+            )
             self.remove_job(check['id'])
             if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
