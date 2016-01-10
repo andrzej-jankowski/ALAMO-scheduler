@@ -4,7 +4,7 @@ apt-get update
 apt-get upgrade
 apt-get -y install mc vim git 2> /dev/null
 apt-get -y install redis-server 2> /dev/null
-apt-get -y install build-essential libbz2-dev libfreetype6-dev libgdbm-dev 2> /dev/null
+apt-get -y install build-essential libbz2-dev libfreetype6-dev libgdbm-dev python3-dev 2> /dev/null
 apt-get -y install python3-pip 2> /dev/null
 
 # Create virtualenv for python 3.4
@@ -29,4 +29,4 @@ fi
 
 # Install application environment
 su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install ipython tox'
-su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install asyncio asyncio_redis aioconsul aioamqp'
+su -l vagrant -c '/home/vagrant/.virtualenvs/alamo/bin/pip install asyncio asyncio_redis aioconsul aioamqp apscheduler'
