@@ -12,6 +12,7 @@ from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka.client import KafkaClient
 from kafka.consumer.simple import SimpleConsumer
+
 from requests import Session, RequestException
 
 from alamo_scheduler.conf import settings
@@ -115,21 +116,40 @@ class AlamoScheduler(object):
 
     def consumer_messages(self):
         logger.debug('Fetching messages from kafka.')
-        messages = self.kafka_consumer.get_messages(
-            count=settings.KAFKA__MESSAGES_COUNT
-        )
-        for message in messages:
-            _, message = message
-            check = json.loads(message.value.decode('utf-8'))
+        checks = {}
+        messages = []
+        kw = dict(count=settings.KAFKA__MESSAGES_COUNT)
+        for _, message in self.kafka_consumer.get_messages(**kw):
+            logger.debug('Retrieved message `{}`'.format(message))
+            messages.append(json.loads(message.value.decode('utf-8')))
 
+        for check in messages:
+            timestamp = checks.get(check['id'], {}).get('timestamp', 0)
+            if timestamp < check['timestamp']:
+                checks[check['id']] = check
+
+        for check_id, check in checks.items():
+            scheduled_check = {}
             logger.info(
                 'New check definition retrieved from kafka: `{}`'.format(check)
             )
-            self.remove_job(check['id'])
+            job = self.scheduler.get_job(str(check_id))
+
+            if job is not None:
+                scheduled_check, = job.args
+
+            timestamp = scheduled_check.get('timestamp', 0)
+            # outdated message
+            if timestamp > check['timestamp']:
+                continue
+
+            if job is not None:
+                self.remove_job(check['id'])
+
             if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
 
-        logger.debug('Messages consumed.')
+        logger.debug('Consumed {} messages from kafka.'.format(len(checks)))
 
     def start(self):
         """Start scheduler."""
