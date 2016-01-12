@@ -10,9 +10,7 @@ import pytz
 from aiomeasures import StatsD
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 from kafka.consumer.kafka import KafkaConsumer
-
 from requests import Session, RequestException
 
 from alamo_scheduler.conf import settings
@@ -118,7 +116,7 @@ class AlamoScheduler(object):
         checks = {}
         messages = []
         for message in self.kafka_consumer.fetch_messages():
-            logger.debug('Retrieved message `{}`'.format(message))
+            logger.debug('Retrieved message `%s`', message)
             messages.append(json.loads(message.value.decode('utf-8')))
 
         for check in messages:
@@ -127,27 +125,25 @@ class AlamoScheduler(object):
                 checks[check['id']] = check
 
         for check_id, check in checks.items():
-            scheduled_check = {}
             logger.info(
                 'New check definition retrieved from kafka: `{}`'.format(check)
             )
             job = self.scheduler.get_job(str(check_id))
 
-            if job is not None:
+            if job:
                 scheduled_check, = job.args
 
-            timestamp = scheduled_check.get('timestamp', 0)
-            # outdated message
-            if timestamp > check['timestamp']:
-                continue
+                timestamp = scheduled_check.get('timestamp', 0)
+                # outdated message
+                if timestamp > check['timestamp']:
+                    continue
 
-            if job is not None:
                 self.remove_job(check['id'])
 
             if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
 
-        logger.debug('Consumed {} messages from kafka.'.format(len(checks)))
+        logger.debug('Consumed %s checks from kafka.', len(checks))
 
     def start(self):
         """Start scheduler."""
