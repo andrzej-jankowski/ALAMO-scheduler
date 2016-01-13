@@ -10,8 +10,7 @@ import pytz
 from aiomeasures import StatsD
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from kafka.client import KafkaClient
-from kafka.consumer.simple import SimpleConsumer
+from kafka.consumer.kafka import KafkaConsumer
 from requests import Session, RequestException
 
 from alamo_scheduler.conf import settings
@@ -25,11 +24,10 @@ class AlamoScheduler(object):
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
-        kafka_client = KafkaClient(settings.KAFKA__HOSTS)
-        self.kafka_consumer = SimpleConsumer(
-            kafka_client,
-            settings.KAFKA__GROUP,
-            settings.KAFKA__TOPIC
+        self.kafka_consumer = KafkaConsumer(
+            settings.KAFKA__TOPIC,
+            group_id=settings.KAFKA__GROUP,
+            bootstrap_servers=settings.KAFKA__HOSTS.split(',')
         )
         self.statsd = self.initialize_statsd()
 
@@ -115,21 +113,37 @@ class AlamoScheduler(object):
 
     def consumer_messages(self):
         logger.debug('Fetching messages from kafka.')
-        messages = self.kafka_consumer.get_messages(
-            count=settings.KAFKA__MESSAGES_COUNT
-        )
-        for message in messages:
-            _, message = message
-            check = json.loads(message.value.decode('utf-8'))
+        checks = {}
+        messages = []
+        for message in self.kafka_consumer.fetch_messages():
+            logger.debug('Retrieved message `%s`', message)
+            messages.append(json.loads(message.value.decode('utf-8')))
 
+        for check in messages:
+            timestamp = checks.get(check['id'], {}).get('timestamp', 0)
+            if timestamp < check['timestamp']:
+                checks[check['id']] = check
+
+        for check_id, check in checks.items():
             logger.info(
                 'New check definition retrieved from kafka: `{}`'.format(check)
             )
-            self.remove_job(check['id'])
+            job = self.scheduler.get_job(str(check_id))
+
+            if job:
+                scheduled_check, = job.args
+
+                timestamp = scheduled_check.get('timestamp', 0)
+                # outdated message
+                if timestamp > check['timestamp']:
+                    continue
+
+                self.remove_job(check['id'])
+
             if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
 
-        logger.debug('Messages consumed.')
+        logger.debug('Consumed %s checks from kafka.', len(checks))
 
     def start(self):
         """Start scheduler."""
