@@ -63,7 +63,7 @@ class AlamoScheduler(object):
                     break
 
         except (RequestException, ValueError, TypeError) as e:
-            logger.error('Unable to retrieve jobs. `{}`'.format(e))
+            logger.error('Unable to retrieve jobs. `%s`', e)
 
         return checks
 
@@ -76,7 +76,7 @@ class AlamoScheduler(object):
 
         self.statsd.incr('_scheduled_check', 1)
         logger.info(
-            'Check `{}:{}` scheduled!'.format(check['id'], check['name'])
+            'Check `%s:%s` scheduled!', check['id'], check['name']
         )
 
         check['scheduled_time'] = datetime.now(tz=pytz.utc).isoformat()
@@ -85,31 +85,34 @@ class AlamoScheduler(object):
     def remove_job(self, job_id):
         """Remove job."""
         try:
-            logger.info('Removing job for check id=`{}`'.format(job_id))
+            logger.info('Removing job for check id=`%s`', job_id)
             self.scheduler.remove_job(str(job_id))
         except JobLookupError:
             pass
 
     def schedule_job(self, check):
         """Schedule new job."""
-        check['fields']['frequency'] = int(check['fields']['frequency'])
-        logger.info(
-            'Scheduling check `{}` with id `{}` and interval `{}`'.format(
+        try:
+            check['fields']['frequency'] = int(check['fields']['frequency'])
+            logger.info(
+                'Scheduling check `%s` with id `%s` and interval `%s`',
                 check['name'], check['id'], check['fields']['frequency']
             )
-        )
-        jitter = random.randint(0, check['fields']['frequency'])
-        first_run = datetime.now() + timedelta(seconds=jitter)
-        self.scheduler.add_job(
-            self._schedule_check, 'interval',
-            seconds=check['fields']['frequency'],
-            misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
-            max_instances=settings.JOBS__MAX_INSTANCES,
-            coalesce=settings.JOBS__COALESCE,
-            id=str(check['id']),
-            next_run_time=first_run,
-            args=(check,)
-        )
+            jitter = random.randint(0, check['fields']['frequency'])
+            first_run = datetime.now() + timedelta(seconds=jitter)
+            self.scheduler.add_job(
+                self._schedule_check, 'interval',
+                seconds=check['fields']['frequency'],
+                misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
+                max_instances=settings.JOBS__MAX_INSTANCES,
+                coalesce=settings.JOBS__COALESCE,
+                id=str(check['id']),
+                next_run_time=first_run,
+                args=(check,)
+            )
+        except KeyError as e:
+            logger.exception('Failed to schedule check: %s. Exception: %s',
+                             check, e)
 
     def consumer_messages(self):
         logger.debug('Fetching messages from kafka.')
@@ -126,7 +129,7 @@ class AlamoScheduler(object):
 
         for check_id, check in checks.items():
             logger.info(
-                'New check definition retrieved from kafka: `{}`'.format(check)
+                'New check definition retrieved from kafka: `%s`', check
             )
             job = self.scheduler.get_job(str(check_id))
 
