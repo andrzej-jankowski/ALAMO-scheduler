@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
-from unittest import TestCase
-from argparse import ArgumentParser
 
+from argparse import ArgumentParser
+from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
 from alamo_scheduler.manage import AlamoManager

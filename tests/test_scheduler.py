@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 from unittest import TestCase
+from unittest.mock import patch
 
 from alamo_scheduler.scheduler import AlamoScheduler
-
-from unittest.mock import patch
 
 
 class TestAlamoScheduler(TestCase):
