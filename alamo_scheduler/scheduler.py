@@ -91,7 +91,10 @@ class AlamoScheduler(object):
             pass
 
     def schedule_job(self, check):
-        """Schedule new job."""
+        """Schedule new job.
+
+        :param dict check: Check data
+        """
         try:
             check['fields']['frequency'] = int(check['fields']['frequency'])
             logger.info(
