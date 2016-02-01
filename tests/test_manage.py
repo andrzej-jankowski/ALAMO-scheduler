@@ -3,7 +3,7 @@ from __future__ import unicode_literals
 from unittest import TestCase
 from argparse import ArgumentParser
 
-from mock import MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 from alamo_scheduler.manage import AlamoManager
 
