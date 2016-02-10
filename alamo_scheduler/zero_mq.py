@@ -2,6 +2,7 @@
 from __future__ import unicode_literals
 
 import zmq
+from threading import RLock
 
 
 class ZeroMQQueue(object):
@@ -14,6 +15,7 @@ class ZeroMQQueue(object):
     def __init__(self, host, port):
         self.host = host
         self.port = port
+        self.lock = RLock()
         self.context = zmq.Context()
 
     def connect(self):
@@ -21,4 +23,5 @@ class ZeroMQQueue(object):
         self.zmq_socket.bind("{}:{}".format(self.host, self.port))
 
     def send(self, payload):
-        self.zmq_socket.send_json(payload)
+        with self.lock:
+            self.zmq_socket.send_json(payload)
