@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import pytz
 from aiomeasures import StatsD
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka.consumer.kafka import KafkaConsumer
@@ -42,6 +43,8 @@ class AlamoScheduler(object):
             settings.ZERO_MQ__PORT
         )
         self.message_queue.connect()
+        self.scheduler.add_listener(self.event_listener,
+                                    EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
     def retrieve_all_jobs(self):
         checks, page = [], 1
@@ -150,6 +153,22 @@ class AlamoScheduler(object):
                 self.schedule_job(check)
 
         logger.debug('Consumed %s checks from kafka.', len(checks))
+
+    def event_listener(self, event):
+        """React on events from scheduler.
+
+        :param apscheduler.events.JobExecutionEvent event: job execution event
+        """
+        if event.code == EVENT_JOB_MISSED:
+            self.statsd.incr('job.missed')
+            logger.warning("Job %s scheduler for %s missed.", event.job_id,
+                           event.scheduled_run_time)
+        elif event.code == EVENT_JOB_ERROR:
+            self.statsd.incr('job.error')
+            logger.error("Job %s scheduled for %s failed. Exc: %s",
+                             event.job_id,
+                             event.scheduled_run_time,
+                             event.exception)
 
     def start(self):
         """Start scheduler."""
