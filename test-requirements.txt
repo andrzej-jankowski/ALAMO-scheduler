@@ -1,2 +1,3 @@
+ddt
 nose
 coveralls
