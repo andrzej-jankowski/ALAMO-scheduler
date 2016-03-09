@@ -49,26 +49,27 @@ class AlamoScheduler(object):
     def retrieve_all_jobs(self):
         checks, page = [], 1
 
-        try:
-            session = Session()
+        with self.statsd.timer('retrieve_all_jobs'):
+            try:
+                session = Session()
 
-            while True:
-                params = {'page': page, 'page_size': 1000}
-                response = session.get(
-                    settings.CHECK__API_URL,
-                    auth=(settings.CHECK__USER, settings.CHECK__PASSWORD),
-                    params=params
-                )
-                data = response.json()
-                checks.extend(data['results'])
-                page += 1
-                if not data['next']:
-                    break
+                while True:
+                    params = {'page': page, 'page_size': 1000}
+                    response = session.get(
+                        settings.CHECK__API_URL,
+                        auth=(settings.CHECK__USER, settings.CHECK__PASSWORD),
+                        params=params
+                    )
+                    data = response.json()
+                    checks.extend(data['results'])
+                    page += 1
+                    if not data['next']:
+                        break
 
-        except (RequestException, ValueError, TypeError) as e:
-            logger.error('Unable to retrieve jobs. `%s`', e)
+            except (RequestException, ValueError, TypeError) as e:
+                logger.error('Unable to retrieve jobs. `%s`', e)
 
-        return checks
+            return checks
 
     def _verbose(self, message):
         if settings.DEFAULT__VERBOSE:
@@ -121,12 +122,14 @@ class AlamoScheduler(object):
                              check, e)
 
     def consumer_messages(self):
+        self.statsd.incr('kafka.consumer.runs')
         logger.debug('Fetching messages from kafka.')
         checks = {}
         messages = []
-        for message in self.kafka_consumer.fetch_messages():
-            logger.debug('Retrieved message `%s`', message)
-            messages.append(json.loads(message.value.decode('utf-8')))
+        with self.statsd.timer('kafka.consumer.fetch_messages'):
+            for message in self.kafka_consumer.fetch_messages():
+                logger.debug('Retrieved message `%s`', message)
+                messages.append(json.loads(message.value.decode('utf-8')))
 
         for check in messages:
             timestamp = checks.get(check['id'], {}).get('timestamp', 0)
