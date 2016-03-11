@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 import pytz
 from aiomeasures import StatsD
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka.consumer.kafka import KafkaConsumer
@@ -42,30 +43,33 @@ class AlamoScheduler(object):
             settings.ZERO_MQ__PORT
         )
         self.message_queue.connect()
+        self.scheduler.add_listener(self.event_listener,
+                                    EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
     def retrieve_all_jobs(self):
         checks, page = [], 1
 
-        try:
-            session = Session()
+        with self.statsd.timer('retrieve_all_jobs'):
+            try:
+                session = Session()
 
-            while True:
-                params = {'page': page, 'page_size': 1000}
-                response = session.get(
-                    settings.CHECK__API_URL,
-                    auth=(settings.CHECK__USER, settings.CHECK__PASSWORD),
-                    params=params
-                )
-                data = response.json()
-                checks.extend(data['results'])
-                page += 1
-                if not data['next']:
-                    break
+                while True:
+                    params = {'page': page, 'page_size': 1000}
+                    response = session.get(
+                        settings.CHECK__API_URL,
+                        auth=(settings.CHECK__USER, settings.CHECK__PASSWORD),
+                        params=params
+                    )
+                    data = response.json()
+                    checks.extend(data['results'])
+                    page += 1
+                    if not data['next']:
+                        break
 
-        except (RequestException, ValueError, TypeError) as e:
-            logger.error('Unable to retrieve jobs. `%s`', e)
+            except (RequestException, ValueError, TypeError) as e:
+                logger.error('Unable to retrieve jobs. `%s`', e)
 
-        return checks
+            return checks
 
     def _verbose(self, message):
         if settings.DEFAULT__VERBOSE:
@@ -118,12 +122,14 @@ class AlamoScheduler(object):
                              check, e)
 
     def consumer_messages(self):
+        self.statsd.incr('kafka.consumer.runs')
         logger.debug('Fetching messages from kafka.')
         checks = {}
         messages = []
-        for message in self.kafka_consumer.fetch_messages():
-            logger.debug('Retrieved message `%s`', message)
-            messages.append(json.loads(message.value.decode('utf-8')))
+        with self.statsd.timer('kafka.consumer.fetch_messages'):
+            for message in self.kafka_consumer.fetch_messages():
+                logger.debug('Retrieved message `%s`', message)
+                messages.append(json.loads(message.value.decode('utf-8')))
 
         for check in messages:
             timestamp = checks.get(check['id'], {}).get('timestamp', 0)
@@ -150,6 +156,22 @@ class AlamoScheduler(object):
                 self.schedule_job(check)
 
         logger.debug('Consumed %s checks from kafka.', len(checks))
+
+    def event_listener(self, event):
+        """React on events from scheduler.
+
+        :param apscheduler.events.JobExecutionEvent event: job execution event
+        """
+        if event.code == EVENT_JOB_MISSED:
+            self.statsd.incr('job.missed')
+            logger.warning("Job %s scheduler for %s missed.", event.job_id,
+                           event.scheduled_run_time)
+        elif event.code == EVENT_JOB_ERROR:
+            self.statsd.incr('job.error')
+            logger.error("Job %s scheduled for %s failed. Exc: %s",
+                             event.job_id,
+                             event.scheduled_run_time,
+                             event.exception)
 
     def start(self):
         """Start scheduler."""

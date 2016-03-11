@@ -50,7 +50,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'ALAMO Scheduler'
-copyright = u'2015, Asgard Team'
+copyright = u'2015-2016, Asgard Team'
 author = u'Asgard Team'
 
 # The version info for the project you're documenting, acts as replacement for
@@ -288,4 +288,5 @@ texinfo_documents = [
 
 
 # Example configuration for intersphinx: refer to the Python standard library.
-intersphinx_mapping = {'https://docs.python.org/': None}
+intersphinx_mapping = {'https://docs.python.org/': None,
+                       'http://apscheduler.readthedocs.org/en/latest/': None}
