@@ -129,7 +129,12 @@ class AlamoScheduler(object):
         with self.statsd.timer('kafka.consumer.fetch_messages'):
             for message in self.kafka_consumer.fetch_messages():
                 logger.debug('Retrieved message `%s`', message)
-                messages.append(json.loads(message.value.decode('utf-8')))
+                kafka_message = json.loads(message.value.decode('utf-8'))
+                if isinstance(kafka_message, list):
+                    for km in kafka_message:
+                        messages.append(km)
+                elif isinstance(kafka_message, dict):
+                    messages.append(kafka_message)
 
         for check in messages:
             timestamp = checks.get(check['uuid'], {}).get('timestamp', 0)
@@ -169,9 +174,9 @@ class AlamoScheduler(object):
         elif event.code == EVENT_JOB_ERROR:
             self.statsd.incr('job.error')
             logger.error("Job %s scheduled for %s failed. Exc: %s",
-                             event.job_id,
-                             event.scheduled_run_time,
-                             event.exception)
+                         event.job_id,
+                         event.scheduled_run_time,
+                         event.exception)
 
     def start(self):
         """Start scheduler."""
