@@ -80,7 +80,7 @@ class AlamoScheduler(object):
 
         self.statsd.incr('_scheduled_check', 1)
         logger.info(
-            'Check `%s:%s` scheduled!', check['id'], check['name']
+            'Check `%s:%s` scheduled!', check['uuid'], check['name']
         )
 
         check['scheduled_time'] = datetime.now(tz=pytz.utc).isoformat()
@@ -113,7 +113,7 @@ class AlamoScheduler(object):
                 misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
                 max_instances=settings.JOBS__MAX_INSTANCES,
                 coalesce=settings.JOBS__COALESCE,
-                id=str(check['id']),
+                id=str(check['uuid']),
                 next_run_time=first_run,
                 args=(check,)
             )
@@ -132,15 +132,15 @@ class AlamoScheduler(object):
                 messages.append(json.loads(message.value.decode('utf-8')))
 
         for check in messages:
-            timestamp = checks.get(check['id'], {}).get('timestamp', 0)
+            timestamp = checks.get(check['uuid'], {}).get('timestamp', 0)
             if timestamp < check['timestamp']:
-                checks[check['id']] = check
+                checks[check['uuid']] = check
 
-        for check_id, check in checks.items():
+        for check_uuid, check in checks.items():
             logger.info(
                 'New check definition retrieved from kafka: `%s`', check
             )
-            job = self.scheduler.get_job(str(check_id))
+            job = self.scheduler.get_job(str(check_uuid))
 
             if job:
                 scheduled_check, = job.args
@@ -150,7 +150,7 @@ class AlamoScheduler(object):
                 if timestamp > check['timestamp']:
                     continue
 
-                self.remove_job(check['id'])
+                self.remove_job(check['uuid'])
 
             if any([trigger['enabled'] for trigger in check['triggers']]):
                 self.schedule_job(check)
