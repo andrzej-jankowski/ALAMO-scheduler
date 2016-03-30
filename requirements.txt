@@ -1,8 +1,8 @@
 pbr
 Sphinx
-APScheduler==3.0.5
+APScheduler==3.0.6
 redis==2.10.5
 pyzmq==15.2.0
-kafka-python==0.9.5
+kafka-python==1.0.2
 requests==2.9.1
 aiomeasures==0.5.14
