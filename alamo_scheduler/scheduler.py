@@ -11,7 +11,7 @@ from aiomeasures import StatsD
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from kafka.consumer.kafka import KafkaConsumer
+from kafka import KafkaConsumer
 from requests import Session, RequestException
 
 from alamo_scheduler.conf import settings
@@ -28,7 +28,8 @@ class AlamoScheduler(object):
         self.kafka_consumer = KafkaConsumer(
             settings.KAFKA__TOPIC,
             group_id=settings.KAFKA__GROUP,
-            bootstrap_servers=settings.KAFKA__HOSTS.split(',')
+            bootstrap_servers=settings.KAFKA__HOSTS.split(','),
+            consumer_timeout_ms=100
         )
         self.statsd = self.initialize_statsd()
 
@@ -127,7 +128,7 @@ class AlamoScheduler(object):
         checks = {}
         messages = []
         with self.statsd.timer('kafka.consumer.fetch_messages'):
-            for message in self.kafka_consumer.fetch_messages():
+            for message in self.kafka_consumer:
                 logger.debug('Retrieved message `%s`', message)
                 kafka_message = json.loads(message.value.decode('utf-8'))
                 if isinstance(kafka_message, list):
