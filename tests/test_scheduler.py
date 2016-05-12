@@ -2,7 +2,6 @@
 from unittest import TestCase
 from unittest.mock import patch
 
-
 from ddt import data, ddt, unpack
 
 from apscheduler.events import (
@@ -43,7 +42,7 @@ class TestAlamoScheduler(TestCase):
 
     def test_schedule_job(self):
         with self.assertLogs('alamo_scheduler.scheduler', level='ERROR'):
-            self.scheduler.schedule_job(self.bad_sample_check)
+            self.scheduler.schedule_check(self.bad_sample_check)
 
     @unpack
     @data({'type': EVENT_JOB_ERROR, 'log_level': 'ERROR'},
