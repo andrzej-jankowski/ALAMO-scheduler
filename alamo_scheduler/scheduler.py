@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 import pytz
 from aiomeasures import StatsD
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
-from apscheduler.jobstores.base import JobLookupError
+from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka import KafkaConsumer
 from requests import Session, RequestException
@@ -48,7 +48,7 @@ class AlamoScheduler(object):
                                     EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
     def retrieve_all_jobs(self):
-        checks, page = [], 1
+        page = 1
 
         with self.statsd.timer('retrieve_all_jobs'):
             try:
@@ -62,15 +62,13 @@ class AlamoScheduler(object):
                         params=params
                     )
                     data = response.json()
-                    checks.extend(data['results'])
+                    yield data['results']
                     page += 1
                     if not data['next']:
                         break
 
             except (RequestException, ValueError, TypeError) as e:
                 logger.error('Unable to retrieve jobs. `%s`', e)
-
-            return checks
 
     def _verbose(self, message):
         if settings.DEFAULT__VERBOSE:
@@ -95,34 +93,51 @@ class AlamoScheduler(object):
         except JobLookupError:
             pass
 
-    def schedule_job(self, check):
-        """Schedule new job.
+    def schedule_check(self, check):
+        """Schedule check with proper interval based on `frequency`.
 
-        :param dict check: Check data
+        :param dict check: Check definition
         """
         try:
-            check['fields']['frequency'] = int(check['fields']['frequency'])
+            frequency = check['fields']['frequency'] = int(
+                check['fields']['frequency']
+            )
             logger.info(
                 'Scheduling check `%s` with id `%s` and interval `%s`',
                 check['name'], check['id'], check['fields']['frequency']
             )
-            jitter = random.randint(0, check['fields']['frequency'])
+            jitter = random.randint(0, frequency)
             first_run = datetime.now() + timedelta(seconds=jitter)
-            self.scheduler.add_job(
-                self._schedule_check, 'interval',
-                seconds=check['fields']['frequency'],
-                misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
-                max_instances=settings.JOBS__MAX_INSTANCES,
-                coalesce=settings.JOBS__COALESCE,
+            kw = dict(
+                seconds=frequency,
                 id=str(check['uuid']),
                 next_run_time=first_run,
                 args=(check,)
             )
+            self.schedule_job(self._schedule_check, **kw)
+
         except KeyError as e:
             logger.exception('Failed to schedule check: %s. Exception: %s',
                              check, e)
 
-    def consumer_messages(self):
+    def schedule_job(self, method, **kwargs):
+        """Add new job to scheduler.
+
+        :param method: reference to method that should be scheduled
+        :param kwargs: additional kwargs passed to `add_job` method
+        """
+        try:
+            self.scheduler.add_job(
+                method, 'interval',
+                misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
+                max_instances=settings.JOBS__MAX_INSTANCES,
+                coalesce=settings.JOBS__COALESCE,
+                **kwargs
+            )
+        except ConflictingIdError as e:
+            logger.error(e)
+
+    def fetch_messages(self):
         self.statsd.incr('kafka.consumer.runs')
         logger.debug('Fetching messages from kafka.')
         checks = {}
@@ -159,7 +174,7 @@ class AlamoScheduler(object):
                 self.remove_job(check['uuid'])
 
             if any([trigger['enabled'] for trigger in check['triggers']]):
-                self.schedule_job(check)
+                self.schedule_check(check)
 
         logger.debug('Consumed %s checks from kafka.', len(checks))
 
@@ -182,16 +197,14 @@ class AlamoScheduler(object):
     def start(self):
         """Start scheduler."""
         self.setup()
-        checks = self.retrieve_all_jobs()
-        self.scheduler.add_job(
-            self.consumer_messages, 'interval',
-            seconds=settings.KAFKA__INTERVAL
-        )
-
-        for check in checks:
-            self.schedule_job(check)
-
         self.scheduler.start()
+        for checks in self.retrieve_all_jobs():
+            for check in checks:
+                self.schedule_check(check)
+
+        self.schedule_job(self.fetch_messages,
+                          seconds=settings.KAFKA__INTERVAL)
+
         self._verbose('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))
 
