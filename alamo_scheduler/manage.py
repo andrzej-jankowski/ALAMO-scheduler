@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from alamo_scheduler.scheduler import AlamoScheduler
-from alamo_scheduler.server import server
+from alamo_scheduler.aioweb import server
 
 
 class AlamoManager(object):

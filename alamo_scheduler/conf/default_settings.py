@@ -4,18 +4,24 @@ import os
 get_env = os.getenv
 
 # default
-
+PAGE_SIZE = int(get_env('ALAMO_PAGE_SIZE', 1000))
 DEFAULT__VERBOSE = get_env('ALAMO_DEFAULT_VERBOSE', True)
 
+# server
+SERVER_HOST = get_env('ALAMO_SERVER_HOST', '0.0.0.0')
+SERVER_PORT = int(get_env('ALAMO_SERVER_PORT', 18080))
+
 # check
-CHECK__API_URL = get_env('ALAMO_CHECK_API_URL')
-CHECK__USER = get_env('ALAMO_CHECK_USER')
-CHECK__PASSWORD = get_env('ALAMO_CHECK_PASSWORD')
+CHECK__API_URL = get_env(
+    'ALAMO_CHECK_API_URL', 'http://example.com/api/checks/'
+)
+CHECK__USER = get_env('ALAMO_CHECK_USER', '')
+CHECK__PASSWORD = get_env('ALAMO_CHECK_PASSWORD', '')
 
 # kafka
-KAFKA__HOSTS = get_env('ALAMO_KAFKA_HOSTS')
-KAFKA__GROUP = get_env('ALAMO_KAFKA_GROUP')
-KAFKA__TOPIC = get_env('ALAMO_KAFKA_TOPIC')
+KAFKA__HOSTS = get_env('ALAMO_KAFKA_HOSTS', 'localhost')
+KAFKA__GROUP = get_env('ALAMO_KAFKA_GROUP', '')
+KAFKA__TOPIC = get_env('ALAMO_KAFKA_TOPIC', '')
 KAFKA__MESSAGES_COUNT = int(get_env('ALAMO_KAFKA_MESSAGES_COUNT', 40))
 KAFKA__INTERVAL = int(get_env('ALAMO_KAFKA_INTERVAL', 10))
 

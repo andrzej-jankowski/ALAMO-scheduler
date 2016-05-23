@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import logging
 
-import pip
-import json
-from aiohttp.web import Application, Response
+from alamo_scheduler.conf import settings
+from pip import get_installed_distributions
 
+from aiohttp.client import ClientSession
+from aiohttp.web import Application, Response, json_response
 
-def json_response(func):
-    def wrapped(*args, **kwargs):
-        response = Response()
-        result = func(*args, **kwargs)
-        response.body = json.dumps(result).encode('utf8')
-        return response
+logger = logging.getLogger(__name__)
 
-    return wrapped
+__all__ = ['ClientSession', 'json_response', 'Response',
+           'SchedulerServerApplication']
 
 
 class SchedulerServerApplication(object):
-    scheduler = _app = None
+    _app = None
+    _srv = _handler = None
 
     def __new__(cls, *args, **kwargs):
         if not hasattr(cls, '_inst'):
@@ -29,11 +28,25 @@ class SchedulerServerApplication(object):
     @asyncio.coroutine
     def init(self, loop=None):
         loop = loop or asyncio.get_event_loop()
+        if self._srv is not None and self._handler is not None:
+            return self._srv, self._handler
         self.configure_contract()
-        handler = self._app.make_handler()
-        srv = yield from loop.create_server(handler, '0.0.0.0', 8080)
-        print("Server started at http://0.0.0.0:8080")
-        return srv, handler
+        self._handler = self.app.make_handler()
+
+        self._srv = yield from loop.create_server(
+            self._handler, settings.SERVER_HOST, settings.SERVER_PORT
+        )
+        logger.info('Server started at http://{}:{}'.format(
+            settings.SERVER_HOST, settings.SERVER_PORT
+        ))
+        return self._srv, self._handler
+
+    @asyncio.coroutine
+    def finish_connections(self):
+        d = ''
+        yield from self._handler.finish_connections()
+        self._srv = self._handler = None
+        d = ''
 
     @property
     def app(self):
@@ -44,23 +57,20 @@ class SchedulerServerApplication(object):
     def ping(self, request):
         return Response(body=b'pong')
 
-    @json_response
     def dependencies(self, request):
-        installed_packages = pip.get_installed_distributions(local_only=True)
-        deps = [dict(name=i.key, version=i.version)
-                for i in installed_packages]
-        return dict(endpoints=deps)
+        installed_packages = get_installed_distributions(local_only=True)
+        dependencies = [dict(name=i.key, version=i.version)
+                        for i in installed_packages]
+        return json_response(data=dict(dependencies=dependencies))
 
-    @json_response
     def info(self, request):
         package = 'alamo-scheduler'
         version = next(iter([p.version for p in
-                             pip.get_installed_distributions(local_only=True)
+                             get_installed_distributions(local_only=True)
                              if p.key == package]), '<unknown>')
 
-        return dict(title=package, version=version)
+        return json_response(data=dict(title=package, version=version))
 
-    @json_response
     def endpoints(self, request):
         endpoints = []
         router = request.app.router
@@ -76,7 +86,7 @@ class SchedulerServerApplication(object):
                     path=path, method=route.method,
                     accept='application/json', tags=[]
                 ))
-        return dict(endpoints=endpoints)
+        return json_response(data=dict(endpoints=endpoints))
 
     def setup(self):
         if self._app is None:
