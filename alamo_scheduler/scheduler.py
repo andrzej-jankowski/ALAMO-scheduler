@@ -30,16 +30,16 @@ class AlamoScheduler(object):
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
         self.kafka_consumer = KafkaConsumer(
-            settings.KAFKA__TOPIC,
-            group_id=settings.KAFKA__GROUP,
-            bootstrap_servers=settings.KAFKA__HOSTS.split(','),
+            settings.KAFKA_TOPIC,
+            group_id=settings.KAFKA_GROUP,
+            bootstrap_servers=settings.KAFKA_HOSTS.split(','),
             consumer_timeout_ms=100
         )
 
     def setup(self):
         self.message_queue = ZeroMQQueue(
-            settings.ZERO_MQ__HOST,
-            settings.ZERO_MQ__PORT
+            settings.ZERO_MQ_HOST,
+            settings.ZERO_MQ_PORT
         )
         self.message_queue.connect()
         self.scheduler.add_listener(self.event_listener,
@@ -53,14 +53,14 @@ class AlamoScheduler(object):
         with ClientSession(
                 loop=loop,
                 auth=BasicAuth(
-                    settings.CHECK__USER, settings.CHECK__PASSWORD
+                    settings.CHECK_USER, settings.CHECK_PASSWORD
                 )
         ) as session:
             while True:
                 params = {'page': page, 'page_size': settings.PAGE_SIZE}
                 try:
                     response = yield from session.get(
-                        settings.CHECK__API_URL,
+                        settings.CHECK_API_URL,
                         params=params
                     )
                     data = yield from response.json()
@@ -128,9 +128,9 @@ class AlamoScheduler(object):
         try:
             self.scheduler.add_job(
                 method, 'interval',
-                misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
-                max_instances=settings.JOBS__MAX_INSTANCES,
-                coalesce=settings.JOBS__COALESCE,
+                misfire_grace_time=settings.JOBS_MISFIRE_GRACE_TIME,
+                max_instances=settings.JOBS_MAX_INSTANCES,
+                coalesce=settings.JOBS_COALESCE,
                 **kwargs
             )
         except ConflictingIdError as e:
@@ -233,7 +233,7 @@ class AlamoScheduler(object):
         srv, self.handler = loop.run_until_complete(server.init(loop))
         loop.run_until_complete(self.retrieve_all_jobs())
         self.schedule_job(self.fetch_messages,
-                          seconds=settings.KAFKA__INTERVAL)
+                          seconds=settings.KAFKA_INTERVAL)
 
         logger.info('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))

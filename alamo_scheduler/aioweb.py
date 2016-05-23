@@ -43,10 +43,8 @@ class SchedulerServerApplication(object):
 
     @asyncio.coroutine
     def finish_connections(self):
-        d = ''
         yield from self._handler.finish_connections()
         self._srv = self._handler = None
-        d = ''
 
     @property
     def app(self):

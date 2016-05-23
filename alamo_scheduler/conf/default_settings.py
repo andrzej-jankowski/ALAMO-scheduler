@@ -5,34 +5,34 @@ get_env = os.getenv
 
 # default
 PAGE_SIZE = int(get_env('ALAMO_PAGE_SIZE', 1000))
-DEFAULT__VERBOSE = get_env('ALAMO_DEFAULT_VERBOSE', True)
+DEFAULT_VERBOSE = get_env('ALAMO_DEFAULT_VERBOSE', True)
 
 # server
 SERVER_HOST = get_env('ALAMO_SERVER_HOST', '0.0.0.0')
 SERVER_PORT = int(get_env('ALAMO_SERVER_PORT', 18080))
 
 # check
-CHECK__API_URL = get_env(
+CHECK_API_URL = get_env(
     'ALAMO_CHECK_API_URL', 'http://example.com/api/checks/'
 )
-CHECK__USER = get_env('ALAMO_CHECK_USER', '')
-CHECK__PASSWORD = get_env('ALAMO_CHECK_PASSWORD', '')
+CHECK_USER = get_env('ALAMO_CHECK_USER', '')
+CHECK_PASSWORD = get_env('ALAMO_CHECK_PASSWORD', '')
 
 # kafka
-KAFKA__HOSTS = get_env('ALAMO_KAFKA_HOSTS', 'localhost')
-KAFKA__GROUP = get_env('ALAMO_KAFKA_GROUP', '')
-KAFKA__TOPIC = get_env('ALAMO_KAFKA_TOPIC', '')
-KAFKA__MESSAGES_COUNT = int(get_env('ALAMO_KAFKA_MESSAGES_COUNT', 40))
-KAFKA__INTERVAL = int(get_env('ALAMO_KAFKA_INTERVAL', 10))
+KAFKA_HOSTS = get_env('ALAMO_KAFKA_HOSTS', 'localhost')
+KAFKA_GROUP = get_env('ALAMO_KAFKA_GROUP', '')
+KAFKA_TOPIC = get_env('ALAMO_KAFKA_TOPIC', '')
+KAFKA_MESSAGES_COUNT = int(get_env('ALAMO_KAFKA_MESSAGES_COUNT', 40))
+KAFKA_INTERVAL = int(get_env('ALAMO_KAFKA_INTERVAL', 10))
 
 # jobs
-JOBS__MISFIRE_GRACE_TIME = int(get_env('ALAMO_JOBS_MISFIRE_GRACE_TIME', 1))
-JOBS__MAX_INSTANCES = int(get_env('ALAMO_JOBS_MAX_INSTANCES', 4))
-JOBS__COALESCE = get_env('ALAMO_JOBS_COALESCE', True)
+JOBS_MISFIRE_GRACE_TIME = int(get_env('ALAMO_JOBS_MISFIRE_GRACE_TIME', 1))
+JOBS_MAX_INSTANCES = int(get_env('ALAMO_JOBS_MAX_INSTANCES', 4))
+JOBS_COALESCE = get_env('ALAMO_JOBS_COALESCE', True)
 
 # zeromq
-ZERO_MQ__HOST = get_env('ALAMO_ZERO_MQ_HOST', 'tcp://127.0.0.1')
-ZERO_MQ__PORT = int(get_env('ALAMO_ZERO_MQ_PORT', 5557))
+ZERO_MQ_HOST = get_env('ALAMO_ZERO_MQ_HOST', 'tcp://127.0.0.1')
+ZERO_MQ_PORT = int(get_env('ALAMO_ZERO_MQ_PORT', 5557))
 
 # statsd
 STATSD_HOST = get_env('ALAMO_STATSD_HOST', 'localhost')
