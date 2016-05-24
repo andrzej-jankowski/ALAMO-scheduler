@@ -7,4 +7,4 @@ kafka-python==1.0.2
 aiohttp==0.21.6
 aiomeasures==0.5.14
 setuptools==21.2.1
--e git+https://github.com/RulersOfAsgard/alamo-common.git@feature/io-statsd#egg=alamo_common
+-e git+https://github.com/RulersOfAsgard/alamo-common.git@master#egg=alamo_common

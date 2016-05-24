@@ -25,11 +25,17 @@ class TestAlamoScheduler(TestCase):
     @patch('alamo_scheduler.scheduler.KafkaConsumer')
     @patch('alamo_scheduler.scheduler.ZeroMQQueue', Mock())
     def setUp(self, *args):
-        self.scheduler = AlamoScheduler()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.scheduler = AlamoScheduler(loop=self.loop)
         self.check = deepcopy(CHECK_TEST_DATA)
         self.check_two = deepcopy(CHECK_TEST_DATA)
         self.check_two['uuid'] = str(uuid4())
         self.connection = Mock()
+
+    def tearDown(self):
+        self.loop.close()
+        asyncio.set_event_loop(None)
 
     def test_schedule_job(self):
         with self.assertLogs('alamo_scheduler.scheduler', level='ERROR'):
@@ -94,19 +100,18 @@ class TestAlamoScheduler(TestCase):
     def test_job_retrieving(self, get_mock):
         queue_mock = Mock()
         self.scheduler.message_queue = queue_mock
-        loop = asyncio.get_event_loop()
 
         def _get_response():
             """Create new partially mocked response object."""
             response = ClientResponse('get', settings.CHECK_API_URL)
             response.headers = {'CONTENT-TYPE': 'application/json'}
-            response._post_init(loop)
+            response._post_init(self.loop)
             response._setup_connection(self.connection)
             return response
 
         def _get_future(result):
             """Wrap `result` as Future object."""
-            fut = asyncio.Future(loop=loop)
+            fut = asyncio.Future(loop=self.loop)
             fut.set_result(result)
             return fut
 
@@ -129,7 +134,7 @@ class TestAlamoScheduler(TestCase):
             _get_future(first_response), _get_future(second_response)
         ]
 
-        asyncio.get_event_loop().run_until_complete(
+        self.loop.run_until_complete(
             self.scheduler.retrieve_all_jobs()
         )
         calls = [
@@ -145,7 +150,7 @@ class TestAlamoScheduler(TestCase):
     def test_setup(self, zmq):
         zmq_mock = Mock()
         zmq.return_value = zmq_mock
-        loop = asyncio.get_event_loop()
+        loop = self.loop
 
         @asyncio.coroutine
         def retrieve(*args, **kwargs):
@@ -157,6 +162,6 @@ class TestAlamoScheduler(TestCase):
         loop.call_later(0.2, run_later)
         self.scheduler.retrieve_all_jobs = retrieve
         self.scheduler.fetch_messages = Mock()
-        self.scheduler.start()
+        self.scheduler.start(loop=self.loop)
         self.assertTrue(zmq_mock.connect.called)
         self.assertFalse(loop.is_running())

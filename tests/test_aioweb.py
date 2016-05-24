@@ -39,22 +39,21 @@ class RequestClient(object):
         )
 
 
-class APITestCase(TestCase):
+class ServerTestCase(TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = RequestClient()
-
-
-class ServerTestCase(APITestCase):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
         cls.loop = asyncio.get_event_loop()
         asyncio.set_event_loop(cls.loop)
+        cls.client = RequestClient()
         srv, cls.handler = cls.loop.run_until_complete(
             server.init(loop=cls.loop)
         )
         server.add_route('GET', '/foo', cls.foo)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.loop.close()
+        asyncio.set_event_loop(None)
 
     @staticmethod
     def foo(*args):

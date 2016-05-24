@@ -9,7 +9,6 @@ class AlamoSettingsTestCase(TestCase):
     @unpack
     @data(
         ('PAGE_SIZE', 1000),
-        ('DEFAULT_VERBOSE', True),
         ('SERVER_HOST', '0.0.0.0'),
         ('SERVER_PORT', 18080),
         ('CHECK_API_URL', 'http://example.com/api/checks/'),

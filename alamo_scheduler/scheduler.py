@@ -20,15 +20,19 @@ from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
 
 logger = logging.getLogger(__name__)
-loop = asyncio.get_event_loop()
 
 
 class AlamoScheduler(object):
     message_queue = None
-    handler = None
+    loop = handler = None
 
-    def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+    def __init__(self, loop=None):
+        kw = dict()
+        if loop:
+            kw['event_loop'] = loop
+
+        self.scheduler = AsyncIOScheduler(**kw)
+
         self.kafka_consumer = KafkaConsumer(
             settings.KAFKA_TOPIC,
             group_id=settings.KAFKA_GROUP,
@@ -36,7 +40,11 @@ class AlamoScheduler(object):
             consumer_timeout_ms=100
         )
 
-    def setup(self):
+    def setup(self, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+            asyncio.set_event_loop(loop)
+        self.loop = loop
         self.message_queue = ZeroMQQueue(
             settings.ZERO_MQ_HOST,
             settings.ZERO_MQ_PORT
@@ -51,7 +59,7 @@ class AlamoScheduler(object):
         page = 1
 
         with ClientSession(
-                loop=loop,
+                loop=self.loop,
                 auth=BasicAuth(
                     settings.CHECK_USER, settings.CHECK_PASSWORD
                 )
@@ -212,30 +220,32 @@ class AlamoScheduler(object):
         yield from asyncio.sleep(0.2)
         for task in asyncio.Task.all_tasks():
             task.cancel()
-        loop.run_until_complete(server.finish_connections())
-        loop.stop()
+        self.loop.run_until_complete(server.finish_connections())
+        self.loop.stop()
 
     def register_exit_signals(self):
         for sig in ['SIGQUIT', 'SIGINT', 'SIGTERM']:
             logger.info('Registering handler for `%s` signal '
                         'in current event loop ...', sig)
-            loop.add_signal_handler(
+            self.loop.add_signal_handler(
                 getattr(signal, sig), asyncio.async,
                 self.wait_and_kill(sig)
             )
 
-    def start(self):
+    def start(self, loop=None):
         """Start scheduler."""
-        self.setup()
+        self.setup(loop=loop)
         self.register_exit_signals()
         self.scheduler.start()
 
-        srv, self.handler = loop.run_until_complete(server.init(loop))
-        loop.run_until_complete(self.retrieve_all_jobs())
+        srv, self.handler = self.loop.run_until_complete(
+            server.init(self.loop)
+        )
+        self.loop.run_until_complete(self.retrieve_all_jobs())
         self.schedule_job(self.fetch_messages,
                           seconds=settings.KAFKA_INTERVAL)
 
         logger.info('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))
-        loop.run_forever()
+        self.loop.run_forever()
         logger.info('Scheduler was stopped!')
