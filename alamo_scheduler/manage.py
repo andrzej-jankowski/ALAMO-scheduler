@@ -14,9 +14,5 @@ class AlamoManager(object):
         self.scheduler.start()
 
 
-def main():
+def execute():
     AlamoManager().execute()
-
-
-if __name__ == '__main__':
-    main()

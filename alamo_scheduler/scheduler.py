@@ -209,7 +209,7 @@ class AlamoScheduler(object):
         logger.warning('Got `%s` signal. Preparing scheduler to exit ...', sig)
         self.scheduler.shutdown()
 
-        yield from asyncio.sleep(0.5)
+        yield from asyncio.sleep(0.2)
         for task in asyncio.Task.all_tasks():
             task.cancel()
         loop.run_until_complete(server.finish_connections())
