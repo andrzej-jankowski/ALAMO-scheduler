@@ -2,6 +2,7 @@
 
 # default
 PAGE_SIZE = 1000
+TRIES = 10
 DEFAULT_VERBOSE = True
 
 # server

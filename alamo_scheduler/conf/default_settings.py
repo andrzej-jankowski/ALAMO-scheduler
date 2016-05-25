@@ -5,6 +5,7 @@ get_env = os.getenv
 
 # default
 PAGE_SIZE = int(get_env('ALAMO_PAGE_SIZE', 1000))
+TRIES = int(get_env('ALAMO_TRIES', 10))
 DEFAULT_VERBOSE = get_env('ALAMO_DEFAULT_VERBOSE', True)
 
 # server

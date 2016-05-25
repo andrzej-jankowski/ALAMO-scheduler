@@ -8,6 +8,7 @@ import signal
 from datetime import datetime, timedelta
 
 from aiohttp import BasicAuth
+from aiohttp.errors import ClientConnectionError
 from alamo_common import aiostats
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
@@ -56,7 +57,7 @@ class AlamoScheduler(object):
     @asyncio.coroutine
     @aiostats.timer()
     def retrieve_all_jobs(self):
-        page = 1
+        page, tries = 1, settings.TRIES
 
         with ClientSession(
                 loop=self.loop,
@@ -79,8 +80,15 @@ class AlamoScheduler(object):
                     if not data['next']:
                         break
 
-                except (ValueError, TypeError) as e:
-                    logger.error('Unable to retrieve jobs. `%s`', e)
+                except (ClientConnectionError, ValueError, TypeError) as e:
+                    logger.error(
+                        'Unable to retrieve page `%s` from `%s`. `%s`',
+                        page, settings.CHECK_API_URL, e
+                    )
+                    tries -= 1
+                    if tries < 0:
+                        raise e
+                    yield from asyncio.sleep(3)
 
     @aiostats.increment()
     def _schedule_check(self, check):
