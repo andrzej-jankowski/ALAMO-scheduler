@@ -4,16 +4,19 @@ import json
 import logging
 import os
 import random
+import signal
 from datetime import datetime, timedelta
 
-import pytz
-from aiomeasures import StatsD
+from aiohttp import BasicAuth
+from aiohttp.errors import ClientConnectionError
+from alamo_common import aiostats
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kafka import KafkaConsumer
-from requests import Session, RequestException
+from pytz import utc as pytz_utc
 
+from alamo_scheduler.aioweb import server, json_response, ClientSession
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
 
@@ -22,67 +25,79 @@ logger = logging.getLogger(__name__)
 
 class AlamoScheduler(object):
     message_queue = None
+    loop = handler = None
 
-    def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+    def __init__(self, loop=None):
+        kw = dict()
+        if loop:
+            kw['event_loop'] = loop
+
+        self.scheduler = AsyncIOScheduler(**kw)
+
         self.kafka_consumer = KafkaConsumer(
-            settings.KAFKA__TOPIC,
-            group_id=settings.KAFKA__GROUP,
-            bootstrap_servers=settings.KAFKA__HOSTS.split(','),
+            settings.KAFKA_TOPIC,
+            group_id=settings.KAFKA_GROUP,
+            bootstrap_servers=settings.KAFKA_HOSTS.split(','),
             consumer_timeout_ms=100
         )
-        self.statsd = self.initialize_statsd()
 
-    def initialize_statsd(self):
-        host = 'udp://{}:{}'.format(settings.STATSD__STATSD_HOST,
-                                    settings.STATSD__STATSD_PORT)
-        return StatsD(addr=host, prefix=settings.STATSD__STATSD_PREFIX)
-
-    def setup(self):
+    def setup(self, loop=None):
+        if loop is None:
+            loop = asyncio.get_event_loop()
+            asyncio.set_event_loop(loop)
+        self.loop = loop
         self.message_queue = ZeroMQQueue(
-            settings.ZERO_MQ__HOST,
-            settings.ZERO_MQ__PORT
+            settings.ZERO_MQ_HOST,
+            settings.ZERO_MQ_PORT
         )
         self.message_queue.connect()
         self.scheduler.add_listener(self.event_listener,
                                     EVENT_JOB_ERROR | EVENT_JOB_MISSED)
 
+    @asyncio.coroutine
+    @aiostats.timer()
     def retrieve_all_jobs(self):
-        page = 1
+        page, tries = 1, settings.TRIES
 
-        with self.statsd.timer('retrieve_all_jobs'):
-            try:
-                session = Session()
-
-                while True:
-                    params = {'page': page, 'page_size': 1000}
-                    response = session.get(
-                        settings.CHECK__API_URL,
-                        auth=(settings.CHECK__USER, settings.CHECK__PASSWORD),
+        with ClientSession(
+                loop=self.loop,
+                auth=BasicAuth(
+                    settings.CHECK_USER, settings.CHECK_PASSWORD
+                )
+        ) as session:
+            while True:
+                params = {'page': page, 'page_size': settings.PAGE_SIZE}
+                try:
+                    response = yield from session.get(
+                        settings.CHECK_API_URL,
                         params=params
                     )
-                    data = response.json()
-                    yield data['results']
+                    data = yield from response.json()
+                    for check in data['results']:
+                        self.schedule_check(check)
+                    yield from response.release()
                     page += 1
                     if not data['next']:
                         break
 
-            except (RequestException, ValueError, TypeError) as e:
-                logger.error('Unable to retrieve jobs. `%s`', e)
+                except (ClientConnectionError, ValueError, TypeError) as e:
+                    logger.error(
+                        'Unable to retrieve page `%s` from `%s`. `%s`',
+                        page, settings.CHECK_API_URL, e
+                    )
+                    tries -= 1
+                    if tries < 0:
+                        raise e
+                    yield from asyncio.sleep(3)
 
-    def _verbose(self, message):
-        if settings.DEFAULT__VERBOSE:
-            logger.debug(message)
-
+    @aiostats.increment()
     def _schedule_check(self, check):
         """Schedule check."""
-
-        self.statsd.incr('_scheduled_check', 1)
         logger.info(
             'Check `%s:%s` scheduled!', check['uuid'], check['name']
         )
 
-        check['scheduled_time'] = datetime.now(tz=pytz.utc).isoformat()
+        check['scheduled_time'] = datetime.now(tz=pytz_utc).isoformat()
         self.message_queue.send(check)
 
     def remove_job(self, job_id):
@@ -104,7 +119,7 @@ class AlamoScheduler(object):
             )
             logger.info(
                 'Scheduling check `%s` with id `%s` and interval `%s`',
-                check['name'], check['id'], check['fields']['frequency']
+                check['name'], check['id'], frequency
             )
             jitter = random.randint(0, frequency)
             first_run = datetime.now() + timedelta(seconds=jitter)
@@ -129,28 +144,28 @@ class AlamoScheduler(object):
         try:
             self.scheduler.add_job(
                 method, 'interval',
-                misfire_grace_time=settings.JOBS__MISFIRE_GRACE_TIME,
-                max_instances=settings.JOBS__MAX_INSTANCES,
-                coalesce=settings.JOBS__COALESCE,
+                misfire_grace_time=settings.JOBS_MISFIRE_GRACE_TIME,
+                max_instances=settings.JOBS_MAX_INSTANCES,
+                coalesce=settings.JOBS_COALESCE,
                 **kwargs
             )
         except ConflictingIdError as e:
             logger.error(e)
 
+    @aiostats.increment(metric_name='kafka.consumer.runs')
+    @aiostats.timer(metric_name='kafka.consumer.fetch_messages')
     def fetch_messages(self):
-        self.statsd.incr('kafka.consumer.runs')
         logger.debug('Fetching messages from kafka.')
         checks = {}
         messages = []
-        with self.statsd.timer('kafka.consumer.fetch_messages'):
-            for message in self.kafka_consumer:
-                logger.debug('Retrieved message `%s`', message)
-                kafka_message = json.loads(message.value.decode('utf-8'))
-                if isinstance(kafka_message, list):
-                    for km in kafka_message:
-                        messages.append(km)
-                elif isinstance(kafka_message, dict):
-                    messages.append(kafka_message)
+        for message in self.kafka_consumer:
+            logger.debug('Retrieved message `%s`', message)
+            kafka_message = json.loads(message.value.decode('utf-8'))
+            if isinstance(kafka_message, list):
+                for km in kafka_message:
+                    messages.append(km)
+            elif isinstance(kafka_message, dict):
+                messages.append(kafka_message)
 
         for check in messages:
             timestamp = checks.get(check['uuid'], {}).get('timestamp', 0)
@@ -184,31 +199,61 @@ class AlamoScheduler(object):
         :param apscheduler.events.JobExecutionEvent event: job execution event
         """
         if event.code == EVENT_JOB_MISSED:
-            self.statsd.incr('job.missed')
+            aiostats.increment.incr('job.missed')
             logger.warning("Job %s scheduler for %s missed.", event.job_id,
                            event.scheduled_run_time)
         elif event.code == EVENT_JOB_ERROR:
-            self.statsd.incr('job.error')
+            aiostats.increment.incr('job.error')
             logger.error("Job %s scheduled for %s failed. Exc: %s",
                          event.job_id,
                          event.scheduled_run_time,
                          event.exception)
 
-    def start(self):
+    def checks(self, request=None):
+        uuid = request.match_info.get('uuid', '<unknown>')
+        job = self.scheduler.get_job(uuid)
+        if job is None:
+            return json_response(
+                data={'detail': 'Check does not exists.'}, status=404
+            )
+
+        check, = job.args
+        return json_response(data=check)
+
+    @asyncio.coroutine
+    def wait_and_kill(self, sig):
+        logger.warning('Got `%s` signal. Preparing scheduler to exit ...', sig)
+        self.scheduler.shutdown()
+
+        yield from asyncio.sleep(0.2)
+        for task in asyncio.Task.all_tasks():
+            task.cancel()
+        self.loop.run_until_complete(server.finish_connections())
+        self.loop.stop()
+
+    def register_exit_signals(self):
+        for sig in ['SIGQUIT', 'SIGINT', 'SIGTERM']:
+            logger.info('Registering handler for `%s` signal '
+                        'in current event loop ...', sig)
+            self.loop.add_signal_handler(
+                getattr(signal, sig), asyncio.async,
+                self.wait_and_kill(sig)
+            )
+
+    def start(self, loop=None):
         """Start scheduler."""
-        self.setup()
+        self.setup(loop=loop)
+        self.register_exit_signals()
         self.scheduler.start()
-        for checks in self.retrieve_all_jobs():
-            for check in checks:
-                self.schedule_check(check)
 
+        srv, self.handler = self.loop.run_until_complete(
+            server.init(self.loop)
+        )
+        self.loop.run_until_complete(self.retrieve_all_jobs())
         self.schedule_job(self.fetch_messages,
-                          seconds=settings.KAFKA__INTERVAL)
+                          seconds=settings.KAFKA_INTERVAL)
 
-        self._verbose('Press Ctrl+{0} to exit.'.format(
+        logger.info('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))
-
-        try:
-            asyncio.get_event_loop().run_forever()
-        except (KeyboardInterrupt, SystemExit):
-            pass
+        self.loop.run_forever()
+        logger.info('Scheduler was stopped!')

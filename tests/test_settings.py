@@ -1,24 +1,32 @@
 # -*- coding: utf-8 -*-
 from unittest import TestCase
+from alamo_scheduler.conf import settings
+from ddt import ddt, data, unpack
 
-from alamo_scheduler.conf import initialize_settings, settings
 
-
+@ddt
 class AlamoSettingsTestCase(TestCase):
-    def setUp(self):
-        data = [
-            ('test', 'string', 'tested string'),
-            ('test', 'bool', 'True'),
-            ('test', 'number', '1234'),
-            ('test', 'float', '99.3')
-        ]
-        initialize_settings(data)
-
-    def test_initialized_object(self):
-        self.assertEqual(settings.TEST__STRING, 'tested string')
-        self.assertEqual(settings.TEST__NUMBER, 1234)
-        self.assertEqual(settings.TEST__FLOAT, 99.3)
-        self.assertTrue(settings.TEST__BOOL)
-
-    def test_non_existing_attr_return_None(self):
-        self.assertEqual(settings.TEST_NON_EXISTS, None)
+    @unpack
+    @data(
+        ('PAGE_SIZE', 1000),
+        ('SERVER_HOST', '0.0.0.0'),
+        ('SERVER_PORT', 18080),
+        ('CHECK_API_URL', 'http://example.com/api/checks/'),
+        ('CHECK_PASSWORD', ''),
+        ('KAFKA_HOSTS', 'localhost'),
+        ('KAFKA_GROUP', ''),
+        ('KAFKA_TOPIC', ''),
+        ('KAFKA_MESSAGES_COUNT', 40),
+        ('KAFKA_INTERVAL', 10),
+        ('JOBS_MISFIRE_GRACE_TIME', 1),
+        ('JOBS_MAX_INSTANCES', 4),
+        ('JOBS_COALESCE', True),
+        ('ZERO_MQ_HOST', 'tcp://128.0.0.1'),
+        ('ZERO_MQ_PORT', 5559),
+        ('STATSD_HOST', 'localhost'),
+        ('STATSD_PORT', 8126),
+        ('STATSD_PREFIX', 'stats.alamo_scheduler.test'),
+        ('STATSD_MAXUDPSIZE', 100),
+    )
+    def test_settings_for_tests(self, field, value):
+        self.assertEqual(getattr(settings, field), value)
