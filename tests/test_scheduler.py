@@ -1,12 +1,10 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import json
 from copy import deepcopy
 from unittest import TestCase
-from unittest.mock import patch, Mock, call
+from unittest.mock import patch, Mock
 from uuid import uuid4
 
-from aiohttp.client_reqrep import ClientResponse
 from apscheduler.events import (
     JobExecutionEvent,
     EVENT_JOB_ERROR,
@@ -15,14 +13,12 @@ from apscheduler.events import (
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from ddt import data, ddt, unpack
 
-from alamo_scheduler.conf import settings
 from alamo_scheduler.scheduler import AlamoScheduler
 from tests.base import CHECK_TEST_DATA
 
 
 @ddt
 class TestAlamoScheduler(TestCase):
-    @patch('alamo_scheduler.scheduler.KafkaConsumer')
     @patch('alamo_scheduler.scheduler.ZeroMQQueue', Mock())
     def setUp(self, *args):
         self.loop = asyncio.new_event_loop()
@@ -90,61 +86,38 @@ class TestAlamoScheduler(TestCase):
         response = self.scheduler.checks(request)
         self.assertIn(self.check['uuid'], response.text)
 
+    @patch('alamo_scheduler.aioweb.json_response')
+    def test_checks_update_endpoint_proper_check(self, json_response_mock):
+        self.scheduler.scheduler.start()
+
+        check = self.check
+
+        @asyncio.coroutine
+        def _json():
+            return check
+
+        request = Mock()
+        request.json = _json
+
+        response = self.scheduler.update(request)
+
+        self.assertEqual(list(response), [])
+        self.assertTrue(json_response_mock.assert_call_with(
+            {'status': 'scheduled'}, 202))
+
+        # test if removing
+
+        response = self.scheduler.update(request)
+
+        self.assertEqual(list(response), [])
+        self.assertTrue(json_response_mock.assert_call_with(
+            {'status': 'removed'}, 202))
+
     def test_checks_endpoint_with_not_provided_uuid(self):
         request = Mock(match_info=dict())
 
         response = self.scheduler.checks(request)
         self.assertIn('Check does not exists.', response.text)
-
-    @patch('alamo_scheduler.scheduler.ClientSession.get')
-    def test_job_retrieving(self, get_mock):
-        queue_mock = Mock()
-        self.scheduler.message_queue = queue_mock
-
-        def _get_response():
-            """Create new partially mocked response object."""
-            response = ClientResponse('get', settings.CHECK_API_URL)
-            response.headers = {'CONTENT-TYPE': 'application/json'}
-            response._post_init(self.loop)
-            response._setup_connection(self.connection)
-            return response
-
-        def _get_future(result):
-            """Wrap `result` as Future object."""
-            fut = asyncio.Future(loop=self.loop)
-            fut.set_result(result)
-            return fut
-
-        first_result = _get_future(
-            json.dumps({'next': True, 'results': [self.check]}).encode('utf8')
-        )
-        second_result = _get_future(
-            json.dumps({'next': False, 'results': [self.check_two]}).encode(
-                'utf8'
-            )
-        )
-        first_response = _get_response()
-        second_response = _get_response()
-        first_response.content = Mock()
-        first_response.content.read.side_effect = [first_result]
-        second_response.content = Mock()
-        second_response.content.read.side_effect = [second_result]
-        # each call should return different response object
-        get_mock.side_effect = [
-            _get_future(first_response), _get_future(second_response)
-        ]
-
-        self.loop.run_until_complete(
-            self.scheduler.retrieve_all_jobs()
-        )
-        calls = [
-            call(settings.CHECK_API_URL,
-                 params={'page': 1, 'page_size': settings.PAGE_SIZE}),
-            call(settings.CHECK_API_URL,
-                 params={'page': 2, 'page_size': settings.PAGE_SIZE})
-        ]
-        get_mock.assert_has_calls(calls, any_order=True)
-        self.assertEqual(len(self.scheduler.scheduler.get_jobs()), 2)
 
     @patch('alamo_scheduler.scheduler.ZeroMQQueue')
     def test_setup(self, zmq):

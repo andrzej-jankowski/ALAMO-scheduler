@@ -7,7 +7,8 @@ get_env = os.getenv
 PAGE_SIZE = int(get_env('ALAMO_PAGE_SIZE', 1000))
 TRIES = int(get_env('ALAMO_TRIES', 10))
 DEFAULT_VERBOSE = get_env('ALAMO_DEFAULT_VERBOSE', True)
-
+SCHEDULER_COUNT = int(get_env('ALAMO_SCHEDULER_COUNT', 1))
+SCHEDULER_NR = int(get_env('ALAMO_SCHEDULER_NR', 0))
 # server
 SERVER_HOST = get_env('ALAMO_SERVER_HOST', '0.0.0.0')
 SERVER_PORT = int(get_env('ALAMO_SERVER_PORT', 18080))
