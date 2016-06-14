@@ -79,7 +79,7 @@ class TestAlamoScheduler(TestCase):
             )
 
     def test_checks_endpoint(self):
-        request = Mock(match_info=dict(uuid=self.check['uuid']))
+        request = Mock(match_info=dict(uuid=self.check['uuid']), method='GET')
         self.scheduler.scheduler.start()
         self.scheduler.schedule_check(self.check)
 
@@ -87,7 +87,7 @@ class TestAlamoScheduler(TestCase):
         self.assertIn(self.check['uuid'], response.text)
 
     @patch('alamo_scheduler.aioweb.json_response')
-    def test_checks_update_endpoint_proper_check(self, json_response_mock):
+    def test_checks_update_endpoint(self, json_response_mock):
         self.scheduler.scheduler.start()
 
         check = self.check
@@ -105,7 +105,7 @@ class TestAlamoScheduler(TestCase):
         self.assertTrue(json_response_mock.assert_call_with(
             {'status': 'scheduled'}, 202))
 
-        # test if removing
+        # test if already scheduled check will be removed
 
         response = self.scheduler.update(request)
 
@@ -114,7 +114,7 @@ class TestAlamoScheduler(TestCase):
             {'status': 'removed'}, 202))
 
     def test_checks_endpoint_with_not_provided_uuid(self):
-        request = Mock(match_info=dict())
+        request = Mock(match_info=dict(), method='GET')
 
         response = self.scheduler.checks(request)
         self.assertIn('Check does not exists.', response.text)

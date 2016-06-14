@@ -122,15 +122,19 @@ class AlamoScheduler(object):
                          event.exception)
 
     def checks(self, request=None):
-        uuid = request.match_info.get('uuid', '<unknown>')
-        job = self.scheduler.get_job(uuid)
-        if job is None:
-            return json_response(
-                data={'detail': 'Check does not exists.'}, status=404
-            )
+        if request.method == 'GET':
+            uuid = request.match_info.get('uuid', '<unknown>')
+            job = self.scheduler.get_job(uuid)
+            if job is None:
+                return json_response(
+                    data={'detail': 'Check does not exists.'}, status=404
+                )
 
-        check, = job.args
-        return json_response(data=check)
+            check, = job.args
+            return json_response(data=check)
+
+        elif request.method == 'POST':
+            return self.update(request)
 
     def update(self, request=None):
         data = yield from request.json()
