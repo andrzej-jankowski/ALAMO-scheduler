@@ -137,27 +137,31 @@ class AlamoScheduler(object):
             return self.update(request)
 
     def update(self, request=None):
-        data = yield from request.json()
-        check_uuid = data.get('uuid', None)
-        check_id = data.get('id', None)
-        should_be_scheduled = False
+        check = yield from request.json()
+        check_uuid = check.get('uuid')
+        check_id = check.get('id')
+
+        message = {'status': 'ok'}
 
         if not check_id or not check_uuid:
             return json_response(status=400)
 
-        if check_id % settings.SCHEDULER_COUNT == settings.SCHEDULER_NR:
-            should_be_scheduled = True
+        if check_id % settings.SCHEDULER_COUNT != settings.SCHEDULER_NR:
+            return json_response(data=message, status=202)
 
         job = self.scheduler.get_job(str(check_uuid))
-        message = {'status': 'ok'}
 
         if job:
-            self.remove_job(check_uuid)
-            message = {'status': 'removed'}
+            scheduled_check, = job.args
+            timestamp = scheduled_check.get('timestamp', 0)
 
-        if any([trigger['enabled'] for trigger in data['triggers']]) \
-                and should_be_scheduled:
-            self.schedule_check(data)
+            if timestamp > check['timestamp']:
+                return json_response(data=message, status=202)
+
+            self.remove_job(check_uuid)
+
+        if any([trigger['enabled'] for trigger in check['triggers']]):
+            self.schedule_check(check)
             message = {'status': 'scheduled'}
 
         return json_response(data=message, status=202)
