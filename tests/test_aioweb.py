@@ -52,6 +52,7 @@ class ServerTestCase(TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        cls.loop.run_until_complete(server.finish_connections())
         cls.loop.close()
         asyncio.set_event_loop(None)
 

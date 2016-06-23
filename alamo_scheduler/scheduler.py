@@ -1,22 +1,18 @@
 # -*- coding: utf-8 -*-
 import asyncio
-import json
 import logging
 import os
 import random
 import signal
 from datetime import datetime, timedelta
 
-from aiohttp import BasicAuth
-from aiohttp.errors import ClientConnectionError
 from alamo_common import aiostats
 from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from kafka import KafkaConsumer
 from pytz import utc as pytz_utc
 
-from alamo_scheduler.aioweb import server, json_response, ClientSession
+from alamo_scheduler.aioweb import server, json_response
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
 
@@ -34,13 +30,6 @@ class AlamoScheduler(object):
 
         self.scheduler = AsyncIOScheduler(**kw)
 
-        self.kafka_consumer = KafkaConsumer(
-            settings.KAFKA_TOPIC,
-            group_id=settings.KAFKA_GROUP,
-            bootstrap_servers=settings.KAFKA_HOSTS.split(','),
-            consumer_timeout_ms=100
-        )
-
     def setup(self, loop=None):
         if loop is None:
             loop = asyncio.get_event_loop()
@@ -53,42 +42,6 @@ class AlamoScheduler(object):
         self.message_queue.connect()
         self.scheduler.add_listener(self.event_listener,
                                     EVENT_JOB_ERROR | EVENT_JOB_MISSED)
-
-    @asyncio.coroutine
-    @aiostats.timer()
-    def retrieve_all_jobs(self):
-        page, tries = 1, settings.TRIES
-
-        with ClientSession(
-                loop=self.loop,
-                auth=BasicAuth(
-                    settings.CHECK_USER, settings.CHECK_PASSWORD
-                )
-        ) as session:
-            while True:
-                params = {'page': page, 'page_size': settings.PAGE_SIZE}
-                try:
-                    response = yield from session.get(
-                        settings.CHECK_API_URL,
-                        params=params
-                    )
-                    data = yield from response.json()
-                    for check in data['results']:
-                        self.schedule_check(check)
-                    yield from response.release()
-                    page += 1
-                    if not data['next']:
-                        break
-
-                except (ClientConnectionError, ValueError, TypeError) as e:
-                    logger.error(
-                        'Unable to retrieve page `%s` from `%s`. `%s`',
-                        page, settings.CHECK_API_URL, e
-                    )
-                    tries -= 1
-                    if tries < 0:
-                        raise e
-                    yield from asyncio.sleep(3)
 
     @aiostats.increment()
     def _schedule_check(self, check):
@@ -152,47 +105,6 @@ class AlamoScheduler(object):
         except ConflictingIdError as e:
             logger.error(e)
 
-    @aiostats.increment(metric_name='kafka.consumer.runs')
-    @aiostats.timer(metric_name='kafka.consumer.fetch_messages')
-    def fetch_messages(self):
-        logger.debug('Fetching messages from kafka.')
-        checks = {}
-        messages = []
-        for message in self.kafka_consumer:
-            logger.debug('Retrieved message `%s`', message)
-            kafka_message = json.loads(message.value.decode('utf-8'))
-            if isinstance(kafka_message, list):
-                for km in kafka_message:
-                    messages.append(km)
-            elif isinstance(kafka_message, dict):
-                messages.append(kafka_message)
-
-        for check in messages:
-            timestamp = checks.get(check['uuid'], {}).get('timestamp', 0)
-            if timestamp < check['timestamp']:
-                checks[check['uuid']] = check
-
-        for check_uuid, check in checks.items():
-            logger.info(
-                'New check definition retrieved from kafka: `%s`', check
-            )
-            job = self.scheduler.get_job(str(check_uuid))
-
-            if job:
-                scheduled_check, = job.args
-
-                timestamp = scheduled_check.get('timestamp', 0)
-                # outdated message
-                if timestamp > check['timestamp']:
-                    continue
-
-                self.remove_job(check['uuid'])
-
-            if any([trigger['enabled'] for trigger in check['triggers']]):
-                self.schedule_check(check)
-
-        logger.debug('Consumed %s checks from kafka.', len(checks))
-
     def event_listener(self, event):
         """React on events from scheduler.
 
@@ -210,15 +122,49 @@ class AlamoScheduler(object):
                          event.exception)
 
     def checks(self, request=None):
-        uuid = request.match_info.get('uuid', '<unknown>')
-        job = self.scheduler.get_job(uuid)
-        if job is None:
-            return json_response(
-                data={'detail': 'Check does not exists.'}, status=404
-            )
+        if request.method == 'GET':
+            uuid = request.match_info.get('uuid', '<unknown>')
+            job = self.scheduler.get_job(uuid)
+            if job is None:
+                return json_response(
+                    data={'detail': 'Check does not exists.'}, status=404
+                )
 
-        check, = job.args
-        return json_response(data=check)
+            check, = job.args
+            return json_response(data=check)
+
+        elif request.method == 'POST':
+            return self.update(request)
+
+    def update(self, request=None):
+        check = yield from request.json()
+        check_uuid = check.get('uuid')
+        check_id = check.get('id')
+
+        message = {'status': 'ok'}
+
+        if not check_id or not check_uuid:
+            return json_response(status=400)
+
+        if check_id % settings.SCHEDULER_COUNT != settings.SCHEDULER_NR:
+            return json_response(data=message, status=202)
+
+        job = self.scheduler.get_job(str(check_uuid))
+
+        if job:
+            scheduled_check, = job.args
+            timestamp = scheduled_check.get('timestamp', 0)
+
+            if timestamp > check['timestamp']:
+                return json_response(data=message, status=202)
+
+            self.remove_job(check_uuid)
+
+        if any([trigger['enabled'] for trigger in check['triggers']]):
+            self.schedule_check(check)
+            message = {'status': 'scheduled'}
+
+        return json_response(data=message, status=202)
 
     @asyncio.coroutine
     def wait_and_kill(self, sig):
@@ -249,9 +195,6 @@ class AlamoScheduler(object):
         srv, self.handler = self.loop.run_until_complete(
             server.init(self.loop)
         )
-        self.loop.run_until_complete(self.retrieve_all_jobs())
-        self.schedule_job(self.fetch_messages,
-                          seconds=settings.KAFKA_INTERVAL)
 
         logger.info('Press Ctrl+{0} to exit.'.format(
             'Break' if os.name == 'nt' else 'C'))
