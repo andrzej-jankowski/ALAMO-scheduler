@@ -172,8 +172,8 @@ class AlamoScheduler(object):
         self.scheduler.shutdown()
 
         yield from asyncio.sleep(0.2)
-        for task in asyncio.Task.all_tasks():
-            task.cancel()
+        pending = asyncio.Task.all_tasks()
+        self.loop.run_until_complete(asyncio.gather(*pending))
         self.loop.run_until_complete(server.finish_connections())
         self.loop.stop()
 
