@@ -121,9 +121,16 @@ class AlamoScheduler(object):
                          event.scheduled_run_time,
                          event.exception)
 
+    @aiostats.increment()
+    def get_jobs(self):
+        return [job.id for job in self.scheduler.get_jobs()]
+
     def checks(self, request=None):
         if request.method == 'GET':
-            uuid = request.match_info.get('uuid', '<unknown>')
+            uuid = request.match_info.get('uuid', None)
+            if uuid is None:
+                jobs = self.get_jobs()
+                return json_response(data=dict(count=len(jobs), results=jobs))
             job = self.scheduler.get_job(uuid)
             if job is None:
                 return json_response(
@@ -136,6 +143,7 @@ class AlamoScheduler(object):
         elif request.method == 'POST':
             return self.update(request)
 
+    @aiostats.timer()
     def update(self, request=None):
         check = yield from request.json()
         check_uuid = check.get('uuid')
