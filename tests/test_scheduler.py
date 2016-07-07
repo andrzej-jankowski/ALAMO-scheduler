@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import asyncio
+import json
 from copy import deepcopy
 from unittest import TestCase
 from unittest.mock import patch, Mock
@@ -117,7 +118,9 @@ class TestAlamoScheduler(TestCase):
         request = Mock(match_info=dict(), method='GET')
 
         response = self.scheduler.checks(request)
-        self.assertIn('Check does not exists.', response.text)
+        self.assertDictEqual(
+            json.loads(response.text), dict(count=0, results=[])
+        )
 
     @patch('alamo_scheduler.scheduler.ZeroMQQueue')
     def test_setup(self, zmq):
