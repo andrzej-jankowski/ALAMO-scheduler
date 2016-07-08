@@ -17,17 +17,15 @@ class TestAlamoWorker(TestCase):
         self.loop.close()
         asyncio.set_event_loop(None)
 
-    @patch('alamo_scheduler.scheduler.KafkaConsumer')
     @patch('alamo_scheduler.manage.AlamoScheduler')
-    def test_manager_execute_method(self, scheduler, _):
+    def test_manager_execute_method(self, scheduler):
         scheduler_mock = Mock()
         scheduler.return_value = scheduler_mock
         self.manager = AlamoManager()
         self.manager.execute()
         self.assertTrue(scheduler_mock.start.called)
 
-    @patch('alamo_scheduler.scheduler.KafkaConsumer')
     @patch('alamo_scheduler.manage.AlamoManager.execute')
-    def test_execute_method(self, execute_mock, _):
+    def test_execute_method(self, execute_mock):
         execute()
         self.assertTrue(execute_mock.called)

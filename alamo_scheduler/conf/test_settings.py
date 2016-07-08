@@ -35,3 +35,6 @@ STATSD_HOST = 'localhost'
 STATSD_PORT = 8126
 STATSD_PREFIX = 'stats.alamo_scheduler.test'
 STATSD_MAXUDPSIZE = 100
+
+SCHEDULER_COUNT = 1
+SCHEDULER_NR = 0
