@@ -1,10 +1,10 @@
+-e git+https://github.com/RulersOfAsgard/alamo-common.git@master#egg=alamo_common
 pbr
 Sphinx
-APScheduler==3.1.0
+APScheduler==3.3.0
 redis==2.10.5
 pyzmq==15.2.0
 kafka-python==1.0.2
 aiohttp==0.21.6
 aiomeasures==0.5.14
 setuptools==21.2.1
--e git+https://github.com/RulersOfAsgard/alamo-common.git@master#egg=alamo_common

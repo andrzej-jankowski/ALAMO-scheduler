@@ -1,9 +1,9 @@
 language: python
 python:
-  - "3.4"
+  - "3.5"
 
 env:
-  - TOX_SUITE=py34
+  - TOX_SUITE=py35
   - TOX_SUITE=pep8
   - TOX_SUITE=coverage
 
