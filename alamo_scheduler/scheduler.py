@@ -7,7 +7,9 @@ import signal
 from datetime import datetime, timedelta
 
 from alamo_common import aiostats
-from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
+from apscheduler.events import (
+    EVENT_JOB_ERROR, EVENT_JOB_MISSED, EVENT_JOB_MAX_INSTANCES
+)
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pytz import utc as pytz_utc
@@ -40,8 +42,10 @@ class AlamoScheduler(object):
             settings.ZERO_MQ_PORT
         )
         self.message_queue.connect()
-        self.scheduler.add_listener(self.event_listener,
-                                    EVENT_JOB_ERROR | EVENT_JOB_MISSED)
+        self.scheduler.add_listener(
+            self.event_listener,
+            EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
+        )
 
     @aiostats.increment()
     def _schedule_check(self, check):
@@ -120,6 +124,13 @@ class AlamoScheduler(object):
                          event.job_id,
                          event.scheduled_run_time,
                          event.exception)
+        elif event.code == EVENT_JOB_MAX_INSTANCES:
+            aiostats.increment.incr('job.max_instances')
+            logger.warning(
+                'Job `%s` could not be submitted. '
+                'Maximum number of running instances was reached.',
+                event.job_id
+            )
 
     @aiostats.increment()
     def get_jobs(self):
