@@ -7,12 +7,14 @@ import signal
 from datetime import datetime, timedelta
 
 from alamo_common import aiostats
-from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
+from apscheduler.events import (
+    EVENT_JOB_ERROR, EVENT_JOB_MISSED, EVENT_JOB_MAX_INSTANCES
+)
 from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pytz import utc as pytz_utc
 
-from alamo_scheduler.aioweb import server, json_response
+from alamo_scheduler.aioweb import json_response
 from alamo_scheduler.conf import settings
 from alamo_scheduler.zero_mq import ZeroMQQueue
 
@@ -40,8 +42,10 @@ class AlamoScheduler(object):
             settings.ZERO_MQ_PORT
         )
         self.message_queue.connect()
-        self.scheduler.add_listener(self.event_listener,
-                                    EVENT_JOB_ERROR | EVENT_JOB_MISSED)
+        self.scheduler.add_listener(
+            self.event_listener,
+            EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
+        )
 
     @aiostats.increment()
     def _schedule_check(self, check):
@@ -120,36 +124,40 @@ class AlamoScheduler(object):
                          event.job_id,
                          event.scheduled_run_time,
                          event.exception)
+        elif event.code == EVENT_JOB_MAX_INSTANCES:
+            aiostats.increment.incr('job.max_instances')
+            logger.warning(
+                'Job `%s` could not be submitted. '
+                'Maximum number of running instances was reached.',
+                event.job_id
+            )
 
     @aiostats.increment()
     def get_jobs(self):
         return [job.id for job in self.scheduler.get_jobs()]
 
-    def checks(self, request=None):
-        if request.method == 'GET':
-            uuid = request.match_info.get('uuid', None)
-            if uuid is None:
-                jobs = self.get_jobs()
-                return json_response(data=dict(count=len(jobs), results=jobs))
-            job = self.scheduler.get_job(uuid)
-            if job is None:
-                return json_response(
-                    data={'detail': 'Check does not exists.'}, status=404
-                )
+    async def checks(self, request=None):
 
-            check, = job.args
-            return json_response(data=check)
+        uuid = request.match_info.get('uuid', None)
+        if uuid is None:
+            jobs = self.get_jobs()
+            return json_response(data=dict(count=len(jobs), results=jobs))
+        job = self.scheduler.get_job(uuid)
+        if job is None:
+            return json_response(
+                data={'detail': 'Check does not exists.'}, status=404
+            )
 
-        elif request.method == 'POST':
-            return self.update(request)
+        check, = job.args
+        return json_response(data=check)
 
     @aiostats.timer()
-    def update(self, request=None):
-        check = yield from request.json()
+    async def update(self, request=None):
+        check = await request.json()
         check_uuid = check.get('uuid')
         check_id = check.get('id')
 
-        message = {'status': 'ok'}
+        message = dict(status='ok')
 
         if not check_id or not check_uuid:
             return json_response(status=400)
@@ -165,24 +173,18 @@ class AlamoScheduler(object):
 
             if timestamp > check['timestamp']:
                 return json_response(data=message, status=202)
-
+            message = dict(status='deleted')
             self.remove_job(check_uuid)
 
         if any([trigger['enabled'] for trigger in check['triggers']]):
             self.schedule_check(check)
-            message = {'status': 'scheduled'}
+            message = dict(status='scheduled')
 
         return json_response(data=message, status=202)
 
-    @asyncio.coroutine
     def wait_and_kill(self, sig):
         logger.warning('Got `%s` signal. Preparing scheduler to exit ...', sig)
         self.scheduler.shutdown()
-
-        yield from asyncio.sleep(0.2)
-        pending = asyncio.Task.all_tasks()
-        self.loop.run_until_complete(asyncio.gather(*pending))
-        self.loop.run_until_complete(server.finish_connections())
         self.loop.stop()
 
     def register_exit_signals(self):
@@ -190,8 +192,8 @@ class AlamoScheduler(object):
             logger.info('Registering handler for `%s` signal '
                         'in current event loop ...', sig)
             self.loop.add_signal_handler(
-                getattr(signal, sig), asyncio.async,
-                self.wait_and_kill(sig)
+                getattr(signal, sig),
+                self.wait_and_kill, sig
             )
 
     def start(self, loop=None):
@@ -200,11 +202,11 @@ class AlamoScheduler(object):
         self.register_exit_signals()
         self.scheduler.start()
 
-        srv, self.handler = self.loop.run_until_complete(
-            server.init(self.loop)
+        logger.info(
+            'Press Ctrl+%s to exit.', 'Break' if os.name == 'nt' else 'C'
         )
-
-        logger.info('Press Ctrl+{0} to exit.'.format(
-            'Break' if os.name == 'nt' else 'C'))
-        self.loop.run_forever()
+        try:
+            self.loop.run_forever()
+        except KeyboardInterrupt:
+            pass
         logger.info('Scheduler was stopped!')
