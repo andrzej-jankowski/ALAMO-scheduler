@@ -31,7 +31,7 @@ class TestAlamoScheduler(TestCase):
         self.connection = Mock()
 
     def tearDown(self):
-        self.loop.close()
+        self.loop.stop()
         asyncio.set_event_loop(None)
 
     def test_schedule_job(self):
@@ -51,7 +51,15 @@ class TestAlamoScheduler(TestCase):
     def test_schedule_check(self):
         queue_mock = Mock()
         self.scheduler.message_queue = queue_mock
-        self.scheduler._schedule_check(self.check)
+
+        def run_later():
+            self.scheduler._schedule_check(self.check)
+            self.scheduler.wait_and_kill('SIGINT')
+
+        self.scheduler.loop = self.loop
+        self.scheduler.scheduler.start()
+        self.loop.call_later(0.5, run_later)
+        self.loop.run_forever()
 
         self.assertTrue(queue_mock.send.called)
 
@@ -84,40 +92,47 @@ class TestAlamoScheduler(TestCase):
         self.scheduler.scheduler.start()
         self.scheduler.schedule_check(self.check)
 
-        response = self.scheduler.checks(request)
+        response = self.loop.run_until_complete(self.scheduler.checks(request))
         self.assertIn(self.check['uuid'], response.text)
 
-    @patch('alamo_scheduler.aioweb.json_response')
+    @patch('alamo_scheduler.scheduler.json_response')
     def test_checks_update_endpoint(self, json_response_mock):
         self.scheduler.scheduler.start()
 
         check = self.check
 
-        @asyncio.coroutine
-        def _json():
+        async def _json():
             return check
 
         request = Mock()
         request.json = _json
 
-        response = self.scheduler.update(request)
+        response = self.loop.run_until_complete(
+            self.scheduler.update(request)
+        )
 
         self.assertEqual(list(response), [])
-        self.assertTrue(json_response_mock.assert_call_with(
-            {'status': 'scheduled'}, 202))
+        json_response_mock.assert_called_with(
+            data={'status': 'scheduled'}, status=202
+        )
 
         # test if already scheduled check will be removed
-
-        response = self.scheduler.update(request)
+        check['triggers'] = []
+        response = self.loop.run_until_complete(
+            self.scheduler.update(request)
+        )
 
         self.assertEqual(list(response), [])
-        self.assertTrue(json_response_mock.assert_call_with(
-            {'status': 'removed'}, 202))
+        json_response_mock.assert_called_with(
+            data={'status': 'deleted'}, status=202
+        )
 
     def test_checks_endpoint_with_not_provided_uuid(self):
         request = Mock(match_info=dict(), method='GET')
 
-        response = self.scheduler.checks(request)
+        response = self.loop.run_until_complete(
+            self.scheduler.checks(request)
+        )
         self.assertDictEqual(
             json.loads(response.text), dict(count=0, results=[])
         )
@@ -128,16 +143,16 @@ class TestAlamoScheduler(TestCase):
         zmq.return_value = zmq_mock
         loop = self.loop
 
-        @asyncio.coroutine
-        def retrieve(*args, **kwargs):
-            yield from asyncio.sleep(0.1)
+        async def retrieve(*args, **kwargs):
+            await asyncio.sleep(0.1)
 
         def run_later():
-            loop.run_until_complete(self.scheduler.wait_and_kill('SIGINT'))
+            self.scheduler.wait_and_kill('SIGINT')
 
         loop.call_later(0.2, run_later)
         self.scheduler.retrieve_all_jobs = retrieve
         self.scheduler.fetch_messages = Mock()
         self.scheduler.start(loop=self.loop)
+        self.loop.close()
         self.assertTrue(zmq_mock.connect.called)
         self.assertFalse(loop.is_running())

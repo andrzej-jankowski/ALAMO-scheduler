@@ -4,7 +4,7 @@ from unittest import TestCase
 from urllib.parse import urljoin
 
 from alamo_scheduler.aioweb import ClientSession, json_response
-from alamo_scheduler.aioweb import server
+from alamo_scheduler.aioweb import SchedulerServerApplication
 from alamo_scheduler.conf import settings
 
 
@@ -13,6 +13,7 @@ class RequestClient(object):
 
     It can perform async requests in sync manner (ready to use in tests).
     """
+
     def __init__(self):
         self.base = 'http://{}:{}'.format(
             settings.SERVER_HOST, settings.SERVER_PORT
@@ -45,14 +46,13 @@ class ServerTestCase(TestCase):
         cls.loop = asyncio.get_event_loop()
         asyncio.set_event_loop(cls.loop)
         cls.client = RequestClient()
-        srv, cls.handler = cls.loop.run_until_complete(
-            server.init(loop=cls.loop)
-        )
-        server.add_route('GET', '/foo', cls.foo)
+        cls.server = SchedulerServerApplication()
+        cls.server.add_route('GET', '/foo', cls.foo)
+        cls.server.init(loop=cls.loop)
 
     @classmethod
     def tearDownClass(cls):
-        cls.loop.run_until_complete(server.finish_connections())
+        cls.server.finish_connections()
         cls.loop.close()
         asyncio.set_event_loop(None)
 
@@ -81,6 +81,10 @@ class ServerTestCase(TestCase):
         self.assertEqual(resp_data['endpoints'], [
             {
                 'accept': 'application/json', 'method': 'GET', 'path': '/foo',
+                'tags': []
+            },
+            {
+                'path': '/', 'method': 'GET', 'accept': 'application/json',
                 'tags': []
             }
         ])
