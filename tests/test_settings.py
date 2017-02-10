@@ -12,6 +12,7 @@ class AlamoSettingsTestCase(TestCase):
         ('SERVER_HOST', '0.0.0.0'),
         ('SERVER_PORT', 18080),
         ('CHECK_API_URL', 'http://example.com/api/checks/'),
+        ('CHECK_PUSH_URL', 'http://example.com/api/hooks/push_checks/'),
         ('CHECK_PASSWORD', ''),
         ('KAFKA_HOSTS', 'localhost'),
         ('KAFKA_GROUP', ''),

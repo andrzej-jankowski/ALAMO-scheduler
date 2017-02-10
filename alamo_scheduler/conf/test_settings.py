@@ -11,6 +11,7 @@ SERVER_PORT = 18080
 
 # check
 CHECK_API_URL = 'http://example.com/api/checks/'
+CHECK_PUSH_URL = 'http://example.com/api/hooks/push_checks/'
 CHECK_USER = ''
 CHECK_PASSWORD = ''
 
