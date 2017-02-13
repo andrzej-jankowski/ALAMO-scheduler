@@ -17,6 +17,9 @@ SERVER_PORT = int(get_env('ALAMO_SERVER_PORT', 18080))
 CHECK_API_URL = get_env(
     'ALAMO_CHECK_API_URL', 'http://example.com/api/checks/'
 )
+CHECK_PUSH_URL = get_env(
+    'ALAMO_CHECK_PUSH_URL', 'http://example.com/api/hooks/push_checks/'
+)
 CHECK_USER = get_env('ALAMO_CHECK_USER', '')
 CHECK_PASSWORD = get_env('ALAMO_CHECK_PASSWORD', '')
 

@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
-import asyncio
 import logging
 import os
 import random
 import signal
 from datetime import datetime, timedelta
 
-from alamo_common import aiostats
-from apscheduler.events import (
-    EVENT_JOB_ERROR, EVENT_JOB_MISSED, EVENT_JOB_MAX_INSTANCES
-)
-from apscheduler.jobstores.base import JobLookupError, ConflictingIdError
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pytz import utc as pytz_utc
 
+import asyncio
+from alamo_common import aiostats
 from alamo_scheduler.aioweb import json_response
 from alamo_scheduler.conf import settings
+from alamo_scheduler.hooks.push_checks import PushChecks
 from alamo_scheduler.zero_mq import ZeroMQQueue
+from apscheduler.events import (EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES,
+                                EVENT_JOB_MISSED)
+from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,14 @@ class AlamoScheduler(object):
             self.event_listener,
             EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
         )
+        self.scheduler.add_job(self.hook, 'interval', id='push_checks',
+            seconds=15)
+
+    def hook(self):
+        hook = PushChecks()
+        result = hook.trigger()
+        if result:
+            self.scheduler.remove_job('push_checks')
 
     @aiostats.increment()
     def _schedule_check(self, check):

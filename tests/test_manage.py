@@ -1,11 +1,10 @@
 # -*- coding: utf-8 -*-
-import asyncio
-
-from asyncio.test_utils import TestLoop
 from unittest import TestCase
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
+import asyncio
 from alamo_scheduler.manage import AlamoManager, execute
+from asyncio.test_utils import TestLoop
 
 
 class TestAlamoWorker(TestCase):
