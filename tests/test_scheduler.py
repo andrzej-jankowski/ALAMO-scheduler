@@ -156,3 +156,13 @@ class TestAlamoScheduler(TestCase):
         self.loop.close()
         self.assertTrue(zmq_mock.connect.called)
         self.assertFalse(loop.is_running())
+
+    @patch('alamo_scheduler.scheduler.PushChecks')
+    def test_hook(self, push_checks):
+        job_id = 'push_checks'
+        self.check['uuid'] = job_id
+        self.scheduler.schedule_check(self.check)
+        self.scheduler.scheduler.start()
+        self.assertEqual(len(self.scheduler.scheduler.get_jobs()), 1)
+        self.assertEqual(None, self.scheduler.hook())
+        self.assertEqual(len(self.scheduler.scheduler.get_jobs()), 0)
