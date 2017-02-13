@@ -7,3 +7,4 @@ pyzmq==15.2.0
 aiohttp==1.1.5
 aiomeasures==0.5.14
 setuptools==21.2.1
+requests==2.13.0

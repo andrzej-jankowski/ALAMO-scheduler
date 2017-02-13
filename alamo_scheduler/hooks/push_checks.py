@@ -25,7 +25,7 @@ class PushChecks(object):
             data = response.json()
             logger.info('Scheduled: {}'.format(data['scheduled']))
             return True
-        except (ValueError, RequestException) as e:
+        except (KeyError, ValueError, RequestException) as e:
             logger.error('Unable to trigger check feeder: %s' % e)
 
         return False
