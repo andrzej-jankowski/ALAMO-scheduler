@@ -47,7 +47,7 @@ class AlamoScheduler(object):
             EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
         )
         self.scheduler.add_job(self.hook, 'interval', id='push_checks',
-            seconds=15)
+            max_instances=1, seconds=15)
 
     def hook(self):
         hook = PushChecks()
