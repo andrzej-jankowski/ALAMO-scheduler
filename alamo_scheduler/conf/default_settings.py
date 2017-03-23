@@ -5,10 +5,9 @@ import socket
 get_env = os.getenv
 
 # default
-SCHEDULER_COUNT = int(get_env('ALAMO_SCHEDULER_COUNT', 1))
 SCHEDULER_HOSTS = get_env('ALAMO_SCHEDULERS').split(',')
 SCHEDULER_NAME = socket.gethostname()
-SCHEDULER_NR = int(get_env('ALAMO_SCHEDULER_NR', 0))
+
 # server
 SERVER_HOST = get_env('ALAMO_SERVER_HOST', '0.0.0.0')
 SERVER_PORT = int(get_env('ALAMO_SERVER_PORT', 18080))
