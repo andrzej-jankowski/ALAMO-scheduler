@@ -26,6 +26,7 @@ JOBS_COALESCE = get_env('ALAMO_JOBS_COALESCE', True)
 # zeromq
 ZERO_MQ_HOST = get_env('ALAMO_ZERO_MQ_HOST', 'tcp://127.0.0.1')
 ZERO_MQ_PORT = int(get_env('ALAMO_ZERO_MQ_PORT', 5557))
+ENVIRONMENTS = get_env('ALAMO_ENVIRONMENTS').split(',')
 
 # statsd
 STATSD_HOST = get_env('ALAMO_STATSD_HOST', 'localhost')

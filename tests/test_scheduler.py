@@ -21,7 +21,7 @@ from tests.base import CHECK_TEST_DATA
 
 @ddt
 class TestAlamoScheduler(TestCase):
-    @patch('alamo_scheduler.scheduler.ZeroMQQueue', Mock())
+    @patch('alamo_scheduler.scheduler.ZeroMQ', Mock())
     def setUp(self, *args):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
@@ -53,7 +53,7 @@ class TestAlamoScheduler(TestCase):
 
     def test_schedule_check(self):
         queue_mock = Mock()
-        self.scheduler.message_queue = queue_mock
+        self.scheduler.queue = queue_mock
 
         def run_later():
             self.scheduler._schedule_check(self.check)
@@ -64,7 +64,7 @@ class TestAlamoScheduler(TestCase):
         self.loop.call_later(0.5, run_later)
         self.loop.run_forever()
 
-        self.assertTrue(queue_mock.send.called)
+        self.assertTrue(queue_mock.test.send.called)
 
     def test_remove_job(self):
         job_id = str(self.check['uuid'])
@@ -140,24 +140,18 @@ class TestAlamoScheduler(TestCase):
             json.loads(response.text), dict(count=0, results=[])
         )
 
-    @patch('alamo_scheduler.scheduler.ZeroMQQueue')
-    def test_setup(self, zmq):
+    def test_setup(self):
         zmq_mock = Mock()
-        zmq.return_value = zmq_mock
         loop = self.loop
-
-        async def retrieve(*args, **kwargs):
-            await asyncio.sleep(0.1)
 
         def run_later():
             self.scheduler.wait_and_kill('SIGINT')
 
+        self.scheduler._init_queues = zmq_mock
         loop.call_later(0.2, run_later)
-        self.scheduler.retrieve_all_jobs = retrieve
-        self.scheduler.fetch_messages = Mock()
         self.scheduler.start(loop=self.loop)
         self.loop.close()
-        self.assertTrue(zmq_mock.connect.called)
+        self.assertTrue(zmq_mock.called)
         self.assertFalse(loop.is_running())
 
     @patch('alamo_scheduler.scheduler.PushChecks')

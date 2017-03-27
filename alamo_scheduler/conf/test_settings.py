@@ -22,6 +22,7 @@ JOBS_COALESCE = True
 # zeromq
 ZERO_MQ_HOST = 'tcp://128.0.0.1'
 ZERO_MQ_PORT = 5559
+ENVIRONMENTS = ['prod']
 
 # statsd
 STATSD_HOST = 'localhost'

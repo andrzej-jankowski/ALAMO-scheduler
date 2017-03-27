@@ -13,7 +13,7 @@ from alamo_scheduler.aioweb import json_response
 from alamo_scheduler.conf import settings
 from alamo_scheduler.hashing import RendezVous
 from alamo_scheduler.hooks.push_checks import PushChecks
-from alamo_scheduler.zero_mq import ZeroMQQueue
+from alamo_scheduler.zero_mq import ZeroMQ
 
 from apscheduler.events import (EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES,
                                 EVENT_JOB_MISSED)
@@ -28,6 +28,7 @@ class AlamoScheduler(object):
     loop = handler = None
     hashing = None
     name = None
+    queue = None
 
     def __init__(self, loop=None):
         kw = dict()
@@ -41,13 +42,9 @@ class AlamoScheduler(object):
             loop = asyncio.get_event_loop()
             asyncio.set_event_loop(loop)
         self.loop = loop
-        self.message_queue = ZeroMQQueue(
-            settings.ZERO_MQ_HOST,
-            settings.ZERO_MQ_PORT
-        )
+        self._init_queues()
         self.hashing = RendezVous(settings.SCHEDULER_HOSTS)
         self.name = settings.SCHEDULER_NAME
-        self.message_queue.connect()
         self.scheduler.add_listener(
             self.event_listener,
             EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
@@ -55,6 +52,13 @@ class AlamoScheduler(object):
         self.scheduler.add_job(
             self.hook, 'interval', id='push_checks', max_instances=1,
             seconds=15
+        )
+
+    def _init_queues(self):
+        self.queue = ZeroMQ(
+            settings.ENVIRONMENTS,
+            settings.ZERO_MQ_HOST,
+            settings.ZERO_MQ_PORT
         )
 
     def hook(self):
@@ -71,7 +75,8 @@ class AlamoScheduler(object):
         )
 
         check['scheduled_time'] = datetime.now(tz=pytz_utc).isoformat()
-        self.message_queue.send(check)
+        environment = check.get('environment', 'prod')
+        getattr(self.queue, environment).send(check)
 
     def remove_job(self, job_id):
         """Remove job."""

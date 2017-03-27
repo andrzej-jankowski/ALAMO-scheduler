@@ -17,6 +17,7 @@ class ZeroMQQueue(object):
         self.port = port
         self.lock = RLock()
         self.context = zmq.Context()
+        self.connect()
 
     def connect(self):
         self.zmq_socket = self.context.socket(zmq.PUSH)
@@ -25,3 +26,10 @@ class ZeroMQQueue(object):
     def send(self, payload):
         with self.lock:
             self.zmq_socket.send_json(payload)
+
+
+class ZeroMQ(object):
+    def __new__(cls, environments: list, host: str, port: int):
+        for p, env in enumerate(environments, start=port):
+            setattr(cls, env, ZeroMQQueue(host, p))
+        return super(ZeroMQ, cls).__new__(cls)
