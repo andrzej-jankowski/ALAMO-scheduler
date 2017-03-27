@@ -55,11 +55,7 @@ class AlamoScheduler(object):
         )
 
     def _init_queues(self):
-        self.queue = ZeroMQ(
-            settings.ENVIRONMENTS,
-            settings.ZERO_MQ_HOST,
-            settings.ZERO_MQ_PORT
-        )
+        self.queue = ZeroMQ()
 
     def hook(self):
         hook = PushChecks()
@@ -76,7 +72,10 @@ class AlamoScheduler(object):
 
         check['scheduled_time'] = datetime.now(tz=pytz_utc).isoformat()
         environment = check.get('environment', 'prod')
-        getattr(self.queue, environment).send(check)
+        try:
+            getattr(self.queue, environment).send(check)
+        except AttributeError as e:
+            logger.error('Unknown check environment %s: %s', environment, e)
 
     def remove_job(self, job_id):
         """Remove job."""
