@@ -11,8 +11,10 @@ import asyncio
 from alamo_common import aiostats
 from alamo_scheduler.aioweb import json_response
 from alamo_scheduler.conf import settings
+from alamo_scheduler.hashing import Hashing
 from alamo_scheduler.hooks.push_checks import PushChecks
 from alamo_scheduler.zero_mq import ZeroMQQueue
+
 from apscheduler.events import (EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES,
                                 EVENT_JOB_MISSED)
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
@@ -24,6 +26,8 @@ logger = logging.getLogger(__name__)
 class AlamoScheduler(object):
     message_queue = None
     loop = handler = None
+    hashing = None
+    name = None
 
     def __init__(self, loop=None):
         kw = dict()
@@ -41,13 +45,17 @@ class AlamoScheduler(object):
             settings.ZERO_MQ_HOST,
             settings.ZERO_MQ_PORT
         )
+        self.hashing = Hashing(settings.SCHEDULER_HOSTS)
+        self.name = settings.SCHEDULER_NAME
         self.message_queue.connect()
         self.scheduler.add_listener(
             self.event_listener,
             EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
         )
-        self.scheduler.add_job(self.hook, 'interval', id='push_checks',
-            max_instances=1, seconds=15)
+        self.scheduler.add_job(
+            self.hook, 'interval', id='push_checks', max_instances=1,
+            seconds=15
+        )
 
     def hook(self):
         hook = PushChecks()
@@ -170,9 +178,8 @@ class AlamoScheduler(object):
         if not check_id or not check_uuid:
             return json_response(status=400)
 
-        if check_id % settings.SCHEDULER_COUNT != settings.SCHEDULER_NR:
+        if self.hashing.select(check_uuid) != self.name:
             return json_response(data=message, status=202)
-
         job = self.scheduler.get_job(str(check_uuid))
 
         if job:
