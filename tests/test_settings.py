@@ -8,17 +8,13 @@ from ddt import ddt, data, unpack
 class AlamoSettingsTestCase(TestCase):
     @unpack
     @data(
-        ('PAGE_SIZE', 1000),
         ('SERVER_HOST', '0.0.0.0'),
         ('SERVER_PORT', 18080),
+        ('SCHEDULER_HOSTS', ['scheduler1', 'scheduler2']),
+        ('SCHEDULER_NAME', 'scheduler1'),
         ('CHECK_API_URL', 'http://example.com/api/checks/'),
         ('CHECK_PUSH_URL', 'http://example.com/api/hooks/push_checks/'),
         ('CHECK_PASSWORD', ''),
-        ('KAFKA_HOSTS', 'localhost'),
-        ('KAFKA_GROUP', ''),
-        ('KAFKA_TOPIC', ''),
-        ('KAFKA_MESSAGES_COUNT', 40),
-        ('KAFKA_INTERVAL', 10),
         ('JOBS_MISFIRE_GRACE_TIME', 1),
         ('JOBS_MAX_INSTANCES', 4),
         ('JOBS_COALESCE', True),
