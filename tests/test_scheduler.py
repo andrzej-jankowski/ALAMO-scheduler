@@ -15,7 +15,7 @@ from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from ddt import data, ddt, unpack
 
 from alamo_scheduler.scheduler import AlamoScheduler
-from alamo_scheduler.hashing import RendezVous
+from alamo_scheduler.hashing import Hashing
 from tests.base import CHECK_TEST_DATA
 
 
@@ -26,7 +26,7 @@ class TestAlamoScheduler(TestCase):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.scheduler = AlamoScheduler(loop=self.loop)
-        self.scheduler.hashing = RendezVous(['scheduler1'])
+        self.scheduler.hashing = Hashing(['scheduler1'])
         self.scheduler.name = 'scheduler1'
         self.check = deepcopy(CHECK_TEST_DATA)
         self.check_two = deepcopy(CHECK_TEST_DATA)

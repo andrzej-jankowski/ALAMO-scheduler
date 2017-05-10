@@ -11,7 +11,7 @@ import asyncio
 from alamo_common import aiostats
 from alamo_scheduler.aioweb import json_response
 from alamo_scheduler.conf import settings
-from alamo_scheduler.hashing import RendezVous
+from alamo_scheduler.hashing import Hashing
 from alamo_scheduler.hooks.push_checks import PushChecks
 from alamo_scheduler.zero_mq import ZeroMQ
 
@@ -43,7 +43,7 @@ class AlamoScheduler(object):
             asyncio.set_event_loop(loop)
         self.loop = loop
         self._init_queues()
-        self.hashing = RendezVous(settings.SCHEDULER_HOSTS)
+        self.hashing = Hashing(settings.SCHEDULER_HOSTS)
         self.name = settings.SCHEDULER_NAME
         self.scheduler.add_listener(
             self.event_listener,
