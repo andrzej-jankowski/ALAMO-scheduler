@@ -12,3 +12,7 @@ repository.
 ### Running a single container
 If you really need to run just a single container without the rest of
 ALAMO, please adapt the settings in contrib/docker_config.cfg accordingly.
+
+### Rendezvous Hashing
+Implementation is based on article:
+http://www.eecs.umich.edu/techreports/cse/96/CSE-TR-316-96.pdf
