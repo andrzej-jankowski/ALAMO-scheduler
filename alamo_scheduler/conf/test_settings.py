@@ -31,3 +31,7 @@ STATSD_MAXUDPSIZE = 100
 
 SCHEDULER_COUNT = 1
 SCHEDULER_NR = 0
+
+# drivers
+
+DRIVER = 'default'
