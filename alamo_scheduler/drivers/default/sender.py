@@ -21,7 +21,7 @@ class DefaultSender(object):
     def send(self, check):
         """Schedule check."""
         logger.info(
-            'Check `%s:%s` scheduled!', check['uuid'], check['name']
+            'Check `%s:%s` scheduled.', check['uuid'], check['name']
         )
 
         check['scheduled_time'] = datetime.now(tz=pytz_utc).isoformat()
