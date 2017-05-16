@@ -35,7 +35,7 @@ STATSD_MAXUDPSIZE = int(get_env('ALAMO_STATSD_MAXUDPSIZE', 512))
 
 # driver
 
-DRIVER = get_env('ALAMO_SCHEDULER_DRIVIER', 'default')
+SENDER_DRIVER = get_env('ALAMO_SCHEDULER_DRIVER', 'default')
 
 ENVIRONMENTS = get_env('ALAMO_ENVIRONMENTS', '').split(',')
 

@@ -43,7 +43,7 @@ class AlamoScheduler(object):
         self.loop = loop
         self.sender = driver.DriverManager(
             namespace=self.plugin_namespace,
-            name=settings.DRIVER,
+            name=settings.SENDER_DRIVER,
             invoke_on_load=True,
         )
         self.hashing = Hashing(settings.SCHEDULER_HOSTS)
