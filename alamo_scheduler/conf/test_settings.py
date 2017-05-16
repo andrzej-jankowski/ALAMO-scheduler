@@ -34,4 +34,4 @@ SCHEDULER_NR = 0
 
 # drivers
 
-DRIVER = 'default'
+SENDER_DRIVER = 'default'
