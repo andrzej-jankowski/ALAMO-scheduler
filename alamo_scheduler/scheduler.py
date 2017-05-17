@@ -1,22 +1,22 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import logging
 import os
 import random
 import signal
 from datetime import datetime, timedelta
-from stevedore import driver
 
-import asyncio
 from alamo_common import aiostats
-from alamo_scheduler.aioweb import json_response
-from alamo_scheduler.conf import settings
-from alamo_scheduler.hashing import Hashing
-from alamo_scheduler.hooks.push_checks import PushChecks
-
 from apscheduler.events import (EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES,
                                 EVENT_JOB_MISSED)
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from stevedore import driver
+
+from alamo_scheduler.aioweb import json_response
+from alamo_scheduler.conf import settings
+from alamo_scheduler.hashing import Hashing
+from alamo_scheduler.hooks.push_checks import PushChecks
 
 logger = logging.getLogger(__name__)
 

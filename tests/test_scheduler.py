@@ -2,7 +2,6 @@
 import asyncio
 import json
 from copy import deepcopy
-from stevedore import driver
 from unittest import TestCase
 from unittest.mock import patch, Mock
 from uuid import uuid4
@@ -14,9 +13,10 @@ from apscheduler.events import (
 )
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from ddt import data, ddt, unpack
+from stevedore import driver
 
-from alamo_scheduler.scheduler import AlamoScheduler
 from alamo_scheduler.hashing import Hashing
+from alamo_scheduler.scheduler import AlamoScheduler
 from tests.base import CHECK_TEST_DATA
 
 
