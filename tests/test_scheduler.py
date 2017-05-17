@@ -13,21 +13,29 @@ from apscheduler.events import (
 )
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from ddt import data, ddt, unpack
+from stevedore import driver
 
-from alamo_scheduler.scheduler import AlamoScheduler
 from alamo_scheduler.hashing import Hashing
+from alamo_scheduler.scheduler import AlamoScheduler
 from tests.base import CHECK_TEST_DATA
 
 
 @ddt
 class TestAlamoScheduler(TestCase):
-    @patch('alamo_scheduler.scheduler.ZeroMQQueue', Mock())
+    plugin_namespace = 'pl.allegro.tech.monitoring.alamo.drivers'
+
+    @patch('alamo_scheduler.drivers.default.sender.ZeroMQQueue', Mock())
     def setUp(self, *args):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.scheduler = AlamoScheduler(loop=self.loop)
         self.scheduler.hashing = Hashing(['scheduler1'])
         self.scheduler.name = 'scheduler1'
+        self.scheduler.sender = driver.DriverManager(
+            namespace=self.plugin_namespace,
+            name='default',
+            invoke_on_load=True,
+        )
         self.check = deepcopy(CHECK_TEST_DATA)
         self.check_two = deepcopy(CHECK_TEST_DATA)
         self.check_two['uuid'] = str(uuid4())
@@ -52,8 +60,8 @@ class TestAlamoScheduler(TestCase):
             self.scheduler.event_listener(event)
 
     def test_schedule_check(self):
-        queue_mock = Mock()
-        self.scheduler.message_queue = queue_mock
+        send_mock = Mock()
+        self.scheduler.sender = send_mock
 
         def run_later():
             self.scheduler._schedule_check(self.check)
@@ -64,7 +72,7 @@ class TestAlamoScheduler(TestCase):
         self.loop.call_later(0.5, run_later)
         self.loop.run_forever()
 
-        self.assertTrue(queue_mock.send.called)
+        self.assertTrue(send_mock.driver.send.called)
 
     def test_remove_job(self):
         job_id = str(self.check['uuid'])
@@ -140,7 +148,7 @@ class TestAlamoScheduler(TestCase):
             json.loads(response.text), dict(count=0, results=[])
         )
 
-    @patch('alamo_scheduler.scheduler.ZeroMQQueue')
+    @patch('alamo_scheduler.drivers.default.sender.ZeroMQQueue')
     def test_setup(self, zmq):
         zmq_mock = Mock()
         zmq.return_value = zmq_mock

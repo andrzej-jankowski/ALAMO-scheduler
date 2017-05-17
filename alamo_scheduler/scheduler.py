@@ -1,33 +1,33 @@
 # -*- coding: utf-8 -*-
+import asyncio
 import logging
 import os
 import random
 import signal
 from datetime import datetime, timedelta
 
-from pytz import utc as pytz_utc
-
-import asyncio
 from alamo_common import aiostats
-from alamo_scheduler.aioweb import json_response
-from alamo_scheduler.conf import settings
-from alamo_scheduler.hashing import Hashing
-from alamo_scheduler.hooks.push_checks import PushChecks
-from alamo_scheduler.zero_mq import ZeroMQQueue
-
 from apscheduler.events import (EVENT_JOB_ERROR, EVENT_JOB_MAX_INSTANCES,
                                 EVENT_JOB_MISSED)
 from apscheduler.jobstores.base import ConflictingIdError, JobLookupError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from stevedore import driver
+
+from alamo_scheduler.aioweb import json_response
+from alamo_scheduler.conf import settings
+from alamo_scheduler.hashing import Hashing
+from alamo_scheduler.hooks.push_checks import PushChecks
 
 logger = logging.getLogger(__name__)
 
 
 class AlamoScheduler(object):
-    message_queue = None
+    sender = None
     loop = handler = None
     hashing = None
     name = None
+
+    plugin_namespace = 'pl.allegro.tech.monitoring.alamo.drivers'
 
     def __init__(self, loop=None):
         kw = dict()
@@ -41,13 +41,13 @@ class AlamoScheduler(object):
             loop = asyncio.get_event_loop()
             asyncio.set_event_loop(loop)
         self.loop = loop
-        self.message_queue = ZeroMQQueue(
-            settings.ZERO_MQ_HOST,
-            settings.ZERO_MQ_PORT
+        self.sender = driver.DriverManager(
+            namespace=self.plugin_namespace,
+            name=settings.SENDER_DRIVER,
+            invoke_on_load=True,
         )
         self.hashing = Hashing(settings.SCHEDULER_HOSTS)
         self.name = settings.SCHEDULER_NAME
-        self.message_queue.connect()
         self.scheduler.add_listener(
             self.event_listener,
             EVENT_JOB_ERROR | EVENT_JOB_MISSED | EVENT_JOB_MAX_INSTANCES
@@ -66,12 +66,7 @@ class AlamoScheduler(object):
     @aiostats.increment()
     def _schedule_check(self, check):
         """Schedule check."""
-        logger.info(
-            'Check `%s:%s` scheduled!', check['uuid'], check['name']
-        )
-
-        check['scheduled_time'] = datetime.now(tz=pytz_utc).isoformat()
-        self.message_queue.send(check)
+        self.sender.driver.send(check)
 
     def remove_job(self, job_id):
         """Remove job."""

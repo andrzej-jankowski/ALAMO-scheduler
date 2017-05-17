@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+
 from alamo_scheduler.aioweb import SchedulerServerApplication
 from alamo_scheduler.scheduler import AlamoScheduler
 
 
 class AlamoManager(object):
+
     def __init__(self):
 
         self.loop = asyncio.new_event_loop()

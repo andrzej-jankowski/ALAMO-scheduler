@@ -33,6 +33,12 @@ STATSD_PORT = int(get_env('ALAMO_STATSD_PORT', 8125))
 STATSD_PREFIX = get_env('ALAMO_STATSD_PREFIX', 'stats')
 STATSD_MAXUDPSIZE = int(get_env('ALAMO_STATSD_MAXUDPSIZE', 512))
 
+# driver
+
+SENDER_DRIVER = get_env('ALAMO_SENDER_DRIVER', 'default')
+
+ENVIRONMENTS = get_env('ALAMO_ENVIRONMENTS', '').split(',')
+
 datefmt = '%Y-%m-%d %H:%M:%S'
 
 LOGGING = {
