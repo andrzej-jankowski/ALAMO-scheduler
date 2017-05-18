@@ -1,10 +1,7 @@
 import abc
 
-import six
 
-
-@six.add_metaclass(abc.ABCMeta)
-class DriverBase(object):
+class DriverBase(object, metaclass=abc.ABCMeta):
 
     @abc.abstractmethod
     def send(self, check):
