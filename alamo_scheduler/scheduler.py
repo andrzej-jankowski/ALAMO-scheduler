@@ -66,6 +66,10 @@ class AlamoScheduler(object):
     @aiostats.increment()
     def _schedule_check(self, check):
         """Schedule check."""
+        # Measure check count for each environment
+        env = check.get('environment', 'unknown')
+        aiostats.increment('scheduler._schedule_check.{}'.format(env))
+
         self.sender.driver.send(check)
 
     def remove_job(self, job_id):
