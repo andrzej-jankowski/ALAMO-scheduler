@@ -68,7 +68,7 @@ class AlamoScheduler(object):
         """Schedule check."""
         # Measure check count for each environment
         env = check.get('environment', 'unknown')
-        aiostats.increment('scheduler._schedule_check.{}'.format(env))
+        aiostats.increment.incr('_schedule_check.{}'.format(env))
 
         self.sender.driver.send(check)
 
