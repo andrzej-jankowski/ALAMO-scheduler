@@ -86,9 +86,13 @@ class AlamoScheduler(object):
         :param dict check: Check definition
         """
         try:
-            frequency = check['fields']['frequency'] = int(
-                check['fields']['frequency']
+            # NOTE(pavlo): required during migration to new format
+            # if frequency could not be found in check fields
+            # get it directly from check. KeyError is expected
+            frequency = int(
+                check.get('fields', {}).get('frequency') or check['frequency']
             )
+
             logger.info(
                 'Scheduling check `%s` with id `%s` and interval `%s`',
                 check['name'], check['id'], frequency
